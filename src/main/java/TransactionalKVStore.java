@@ -37,7 +37,7 @@ public class TransactionalKVStore<K, V> {
     }
 
 
-    public void Begin(final int transactionId) {
+    public void begin(final int transactionId) {
 
         //Open a transaction with this id. Throw an exception if this ID already exists
         if (transactionQueue.get(transactionId) != null) {
@@ -49,8 +49,6 @@ public class TransactionalKVStore<K, V> {
 
     public void write(K key, V value, final int transactionId) {
 
-        //payload
-        //store.put(key, value);
         List<TransactionalUnit<K, V>> transactionList = transactionQueue.get(transactionId);
         if (transactionList == null) {
             throw new RuntimeException("Attempting to add a write " +
@@ -73,9 +71,13 @@ public class TransactionalKVStore<K, V> {
         transactionList.add(writeRequest);
     }
 
+    public List<TransactionalUnit<K,V>> commit(final int transactionId) {
 
-    //In theory, Commit could return a set of Key-Values read
-    public List<TransactionalUnit<K,V>> Commit(final int transactionId) {
+        /** TODO: Think of an atomic implementation. Likely this will just involve operating on
+         * a copy of the data until it succeeds or fails. Then the pointer will point to the new
+         * data structure and the old one will be discarded. In the case of failure, however, the
+         * pointer will not be switched and a failure will be returned.
+         */
 
         List<TransactionalUnit<K, V>> returnedResults = new ArrayList<TransactionalUnit<K, V>>();
         for (TransactionalUnit<K, V> individualCommit : transactionQueue.get(transactionId)) {

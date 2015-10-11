@@ -5,7 +5,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Created by aleks on 10/4/15.
+ * A basic KV store that supports atomic sets of reads and writes. This isn't a truly atomic store because
+ * there is no all-or-nothing behavior in the case of failure.
  */
 public class TestTransactionStore<K,V> {
 
@@ -58,11 +59,11 @@ public class TestTransactionStore<K,V> {
         final int VALUE1 = 5;
 
         int transactionId = 0;
-        kvStore.Begin(transactionId);
+        kvStore.begin(transactionId);
         kvStore.write(KEY1, VALUE1, transactionId);
         kvStore.read(KEY1, transactionId);
 
-        List<TransactionalKVStore.TransactionalUnit<String,Integer>> committedTransactions = kvStore.Commit(transactionId);
+        List<TransactionalKVStore.TransactionalUnit<String,Integer>> committedTransactions = kvStore.commit(transactionId);
         TransactionalKVStore.TransactionalUnit<String,Integer> readOutput = committedTransactions.get(1);
         Assert.assertEquals((Integer)VALUE1, (Integer)readOutput.getValue());
     }
@@ -88,22 +89,22 @@ public class TestTransactionStore<K,V> {
         final Integer VALUE1_1 = VALUE1_0 + INCREMENT;
         final Integer VALUE2_1 = VALUE2_0 + INCREMENT;
 
-        kvStore.Begin(INITIAL_WRITE_TRANSACTION);
+        kvStore.begin(INITIAL_WRITE_TRANSACTION);
         kvStore.write(KEY1, VALUE1_0, INITIAL_WRITE_TRANSACTION);
         kvStore.write(KEY2, VALUE2_0, INITIAL_WRITE_TRANSACTION);
-        kvStore.Commit(INITIAL_WRITE_TRANSACTION);
+        kvStore.commit(INITIAL_WRITE_TRANSACTION);
 
-        //Begin the read transaction but don't commit it!
-        kvStore.Begin(INITIAL_READ_TRANSACTION);
+        //begin the read transaction but don't commit it!
+        kvStore.begin(INITIAL_READ_TRANSACTION);
         kvStore.read(KEY1, INITIAL_READ_TRANSACTION);
         kvStore.read(KEY2, INITIAL_READ_TRANSACTION);
 
-        kvStore.Begin(INCREMENT_TRANSACTION);
+        kvStore.begin(INCREMENT_TRANSACTION);
         kvStore.write(KEY1, VALUE1_1, INCREMENT_TRANSACTION);
         kvStore.write(KEY2, VALUE2_1, INCREMENT_TRANSACTION);
-        kvStore.Commit(INCREMENT_TRANSACTION);
+        kvStore.commit(INCREMENT_TRANSACTION);
 
-        List<TransactionalKVStore.TransactionalUnit<String, Integer>> readResults = kvStore.Commit(INITIAL_READ_TRANSACTION);
+        List<TransactionalKVStore.TransactionalUnit<String, Integer>> readResults = kvStore.commit(INITIAL_READ_TRANSACTION);
 
         final Integer READ_1_OUTPUT = readResults.get(0).getValue();
         final Integer READ_2_OUTPUT = readResults.get(1).getValue();
