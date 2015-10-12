@@ -71,7 +71,7 @@ public class TransactionalKVStore<K, V> {
         transactionList.add(writeRequest);
     }
 
-    public List<TransactionalUnit<K,V>> commit(final int transactionId) {
+    public List<TransactionalUnit<K, V>> commit(final int transactionId) {
 
         /** TODO: Think of an atomic implementation. Likely this will just involve operating on
          * a copy of the data until it succeeds or fails. Then the pointer will point to the new
@@ -100,6 +100,7 @@ public class TransactionalKVStore<K, V> {
     public abstract static class TransactionalUnit<K, V> {
 
         abstract K getKey();
+
         abstract V getValue();
     }
 
@@ -117,7 +118,9 @@ public class TransactionalKVStore<K, V> {
             this.value = value;
         }
 
-        public K getKey() { return this.key; }
+        public K getKey() {
+            return this.key;
+        }
 
         Object getValue() {
             return this.value;

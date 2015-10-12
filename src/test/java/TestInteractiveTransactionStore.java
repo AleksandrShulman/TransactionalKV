@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Created by aleks on 10/6/15.
@@ -13,6 +15,12 @@ import java.util.Map;
 
 public class TestInteractiveTransactionStore {
 
+    private static final Logger logger =
+            Logger.getLogger(TestTransactionStore.class.getName());
+
+    static {
+        logger.setLevel(Level.FINE);
+    }
     final int MAX_FAILED_ATTEMPTS_TO_LOCK = 5;
 
     @Test
@@ -23,7 +31,7 @@ public class TestInteractiveTransactionStore {
         final int FIRST_COMMIT = 0;
         final String KEY = "key1";
         final int VALUE1 = (int) Math.random() * 50;
-        final int INCREMENT_AMOUNT = (int) Math.random() * 100;
+        final int INCREMENT_AMOUNT = (int) (Math.random() * 100);
         final int EXPECTED_FINAL_VALUE = VALUE1 + INCREMENT_AMOUNT;
         final List<String> INITIAL_KEY_LIST = new ArrayList<String>();
         INITIAL_KEY_LIST.add(KEY);
@@ -48,7 +56,7 @@ public class TestInteractiveTransactionStore {
         // Final transaction to read the value
         int THIRD_COMMIT = SECOND_COMMIT + 1;
         beginAndWait(ikv, THIRD_COMMIT, INITIAL_KEY_LIST, MAX_FAILED_ATTEMPTS_TO_LOCK);
-        int returnedFinalValue = ikv.read(KEY, SECOND_COMMIT);
+        int returnedFinalValue = ikv.read(KEY, THIRD_COMMIT);
 
         Assert.assertEquals("Upon re-query, the KV store " +
                 "returned an incorrect value.", (int) EXPECTED_FINAL_VALUE, (int) returnedFinalValue);
@@ -190,5 +198,78 @@ public class TestInteractiveTransactionStore {
         }
 
         ikv.commit(FIFTH_COMMIT);
+    }
+
+    @Test
+    public void testInterleavedCommit() throws InterruptedException {
+
+        //add some data
+        final String KEY_1 = "key1";
+        final String KEY_2 = "key2";
+        final String KEY_3 = "key3";
+        final String KEY_4 = "key4";
+
+        final Integer VALUE_1 =(int) (Math.random() * 50);
+        final Integer VALUE_2 =(int) (Math.random() * 50);
+        final Integer VALUE_3 =(int) (Math.random() * 50);
+        final Integer VALUE_4 =(int) (Math.random() * 50);
+
+        //Initialize with the first set of values. DataMap reflects the expected source of truth for the system
+        final Map<String,Integer> expectedKVs = new HashMap<String, Integer>();
+        expectedKVs.put(KEY_1, VALUE_1);
+        expectedKVs.put(KEY_2, VALUE_2);
+        expectedKVs.put(KEY_3, VALUE_3);
+
+        InteractiveTransactionalKVStore<String, Integer> ikv = new InteractiveTransactionalKVStore<String, Integer>();
+        final int FIRST_COMMIT = 0;
+        final int SECOND_COMMIT = FIRST_COMMIT+1;
+        final int THIRD_COMMIT = SECOND_COMMIT+1;
+        final int FOURTH_COMMIT = THIRD_COMMIT+1;
+
+        final List<String> INITIAL_KEY_LIST = new ArrayList<String>();
+        INITIAL_KEY_LIST.add(KEY_1);
+        INITIAL_KEY_LIST.add(KEY_2);
+        INITIAL_KEY_LIST.add(KEY_3);
+
+        beginAndWait(ikv, FIRST_COMMIT, INITIAL_KEY_LIST, MAX_FAILED_ATTEMPTS_TO_LOCK);
+        for (String key : expectedKVs.keySet()) {
+
+            ikv.write(key, expectedKVs.get(key), FIRST_COMMIT);
+        }
+
+        ikv.commit(FIRST_COMMIT);
+
+        //perform a transaction on those keys, but do not commit
+        List<String> k2k3 = new ArrayList<String>();
+        k2k3.add(KEY_2);
+        k2k3.add(KEY_3);
+
+        beginAndWait(ikv, SECOND_COMMIT, k2k3, MAX_FAILED_ATTEMPTS_TO_LOCK);
+        int NEW_VALUE_2 = VALUE_2 + 1;
+        int NEW_VALUE_3 = VALUE_3 + 1;
+        ikv.write(KEY_2, NEW_VALUE_2, SECOND_COMMIT);
+        ikv.write(KEY_3, NEW_VALUE_3, SECOND_COMMIT);
+
+        expectedKVs.put(KEY_2, NEW_VALUE_2);
+        expectedKVs.put(KEY_3, NEW_VALUE_3);
+
+        //start performing another transaction on another set of keys
+        List<String> k4 = new ArrayList<String>();
+        k2k3.add(KEY_4);
+        beginAndWait(ikv, THIRD_COMMIT, k4, MAX_FAILED_ATTEMPTS_TO_LOCK);
+        ikv.write(KEY_4, VALUE_4, THIRD_COMMIT);
+
+        //Commit in reverse order
+        ikv.commit(THIRD_COMMIT);
+        ikv.commit(SECOND_COMMIT);
+
+        expectedKVs.put(KEY_4, VALUE_4);
+        beginAndWait(ikv, FOURTH_COMMIT, new ArrayList(expectedKVs.keySet()), MAX_FAILED_ATTEMPTS_TO_LOCK);
+
+        //verify all data there
+        for (String key : expectedKVs.keySet()) {
+            logger.fine("Check that KV contains key " + key + " with expected value " + expectedKVs.get(key));
+            Assert.assertEquals(expectedKVs.get(key), ikv.read(key, FOURTH_COMMIT));
+        }
     }
 }

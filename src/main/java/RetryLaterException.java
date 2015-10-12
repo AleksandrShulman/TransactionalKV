@@ -3,10 +3,10 @@
  */
 public class RetryLaterException extends Exception {
 
-    private int msToWait=1000;
+    private int msToWait = 1000;
 
     public RetryLaterException(int numMatches) {
-        this.msToWait = 100 + 50*numMatches;
+        this.msToWait = 100 + 50 * numMatches;
     }
 
     @Override
