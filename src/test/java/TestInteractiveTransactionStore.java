@@ -21,6 +21,7 @@ public class TestInteractiveTransactionStore {
     static {
         logger.setLevel(Level.FINE);
     }
+
     final int MAX_FAILED_ATTEMPTS_TO_LOCK = 5;
 
     @Test
@@ -123,23 +124,23 @@ public class TestInteractiveTransactionStore {
         final String KEY_3 = "key3";
         final String KEY_4 = "key4";
 
-        final Integer VALUE_1 =(int) (Math.random() * 50);
-        final Integer VALUE_2 =(int) (Math.random() * 50);
-        final Integer VALUE_3 =(int) (Math.random() * 50);
-        final Integer VALUE_4 =(int) (Math.random() * 50);
+        final Integer VALUE_1 = (int) (Math.random() * 50);
+        final Integer VALUE_2 = (int) (Math.random() * 50);
+        final Integer VALUE_3 = (int) (Math.random() * 50);
+        final Integer VALUE_4 = (int) (Math.random() * 50);
 
         //Initialize with the first set of values
-        final Map<String,Integer> initialDataMap = new HashMap<String, Integer>();
+        final Map<String, Integer> initialDataMap = new HashMap<String, Integer>();
         initialDataMap.put(KEY_1, VALUE_1);
         initialDataMap.put(KEY_2, VALUE_2);
         initialDataMap.put(KEY_3, VALUE_3);
 
         InteractiveTransactionalKVStore<String, Integer> ikv = new InteractiveTransactionalKVStore<String, Integer>();
         final int FIRST_COMMIT = 0;
-        final int SECOND_COMMIT = FIRST_COMMIT+1;
-        final int THIRD_COMMIT = SECOND_COMMIT+1;
-        final int FOURTH_COMMIT = THIRD_COMMIT+1;
-        final int FIFTH_COMMIT = FOURTH_COMMIT+1;
+        final int SECOND_COMMIT = FIRST_COMMIT + 1;
+        final int THIRD_COMMIT = SECOND_COMMIT + 1;
+        final int FOURTH_COMMIT = THIRD_COMMIT + 1;
+        final int FIFTH_COMMIT = FOURTH_COMMIT + 1;
 
         final List<String> INITIAL_KEY_LIST = new ArrayList<String>();
         INITIAL_KEY_LIST.add(KEY_1);
@@ -166,7 +167,7 @@ public class TestInteractiveTransactionStore {
         beginAndWait(ikv, THIRD_COMMIT, INITIAL_KEY_LIST, MAX_FAILED_ATTEMPTS_TO_LOCK);
         for (String key : initialDataMap.keySet()) {
 
-            Assert.assertEquals(initialDataMap.get(key),ikv.read(key, THIRD_COMMIT));
+            Assert.assertEquals(initialDataMap.get(key), ikv.read(key, THIRD_COMMIT));
         }
 
         ikv.commit(THIRD_COMMIT);
@@ -194,7 +195,7 @@ public class TestInteractiveTransactionStore {
         beginAndWait(ikv, FIFTH_COMMIT, INITIAL_KEY_LIST, MAX_FAILED_ATTEMPTS_TO_LOCK);
         for (String key : initialDataMap.keySet()) {
 
-            Assert.assertEquals(initialDataMap.get(key),ikv.read(key, FIFTH_COMMIT));
+            Assert.assertEquals(initialDataMap.get(key), ikv.read(key, FIFTH_COMMIT));
         }
 
         ikv.commit(FIFTH_COMMIT);
@@ -209,22 +210,22 @@ public class TestInteractiveTransactionStore {
         final String KEY_3 = "key3";
         final String KEY_4 = "key4";
 
-        final Integer VALUE_1 =(int) (Math.random() * 50);
-        final Integer VALUE_2 =(int) (Math.random() * 50);
-        final Integer VALUE_3 =(int) (Math.random() * 50);
-        final Integer VALUE_4 =(int) (Math.random() * 50);
+        final Integer VALUE_1 = (int) (Math.random() * 50);
+        final Integer VALUE_2 = (int) (Math.random() * 50);
+        final Integer VALUE_3 = (int) (Math.random() * 50);
+        final Integer VALUE_4 = (int) (Math.random() * 50);
 
         //Initialize with the first set of values. DataMap reflects the expected source of truth for the system
-        final Map<String,Integer> expectedKVs = new HashMap<String, Integer>();
+        final Map<String, Integer> expectedKVs = new HashMap<String, Integer>();
         expectedKVs.put(KEY_1, VALUE_1);
         expectedKVs.put(KEY_2, VALUE_2);
         expectedKVs.put(KEY_3, VALUE_3);
 
         InteractiveTransactionalKVStore<String, Integer> ikv = new InteractiveTransactionalKVStore<String, Integer>();
         final int FIRST_COMMIT = 0;
-        final int SECOND_COMMIT = FIRST_COMMIT+1;
-        final int THIRD_COMMIT = SECOND_COMMIT+1;
-        final int FOURTH_COMMIT = THIRD_COMMIT+1;
+        final int SECOND_COMMIT = FIRST_COMMIT + 1;
+        final int THIRD_COMMIT = SECOND_COMMIT + 1;
+        final int FOURTH_COMMIT = THIRD_COMMIT + 1;
 
         final List<String> INITIAL_KEY_LIST = new ArrayList<String>();
         INITIAL_KEY_LIST.add(KEY_1);

@@ -1,7 +1,5 @@
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.sql.Timestamp;
+import java.util.*;
 
 /**
  * A class designed to group operations into transactions and execute those transactions.
@@ -100,7 +98,7 @@ public class TransactionalKVStore<K, V> {
     public abstract static class TransactionalUnit<K, V> {
 
         abstract K getKey();
-
+        abstract Date getTimeStamp();
         abstract V getValue();
     }
 
@@ -108,10 +106,12 @@ public class TransactionalKVStore<K, V> {
 
         private K key;
         private V value;
+        final private Date timestamp;
 
         public IsolatedRead(K key) {
 
             this.key = key;
+            this.timestamp = new Date();
         }
 
         public void setValue(V value) {
@@ -122,6 +122,10 @@ public class TransactionalKVStore<K, V> {
             return this.key;
         }
 
+        public Date getTimeStamp() {
+            return this.timestamp;
+        }
+
         Object getValue() {
             return this.value;
         }
@@ -129,21 +133,23 @@ public class TransactionalKVStore<K, V> {
 
     public static class ValueChange<K, V> extends TransactionalUnit {
 
-        private K key;
-        private V value;
+        final private K key;
+        final private V value;
+        final private Date timestamp;
 
         public ValueChange(K key, V newValue) {
 
             this.key = key;
             this.value = newValue;
+            this.timestamp = new Date();
+        }
+
+        public Date getTimeStamp() {
+            return this.timestamp;
         }
 
         public K getKey() {
             return key;
-        }
-
-        public void setKey(K key) {
-            this.key = key;
         }
 
         @Override

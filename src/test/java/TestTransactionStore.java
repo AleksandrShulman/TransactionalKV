@@ -8,7 +8,7 @@ import java.util.logging.Logger;
  * A basic KV store that supports atomic sets of reads and writes. This isn't a truly atomic store because
  * there is no all-or-nothing behavior in the case of failure.
  */
-public class TestTransactionStore<K,V> {
+public class TestTransactionStore<K, V> {
 
     private static final Logger logger =
             Logger.getLogger(TestTransactionStore.class.getName());
@@ -46,14 +46,14 @@ public class TestTransactionStore<K,V> {
     @Ignore
     public void testSimultaneousAppends() {
 
-        TransactionalKVStore<String,Integer> kvStore = new TransactionalKVStore<String,Integer>();
+        TransactionalKVStore<String, Integer> kvStore = new TransactionalKVStore<String, Integer>();
         //TODO: Finish this when implementing returns from a read operation that hasn't been committed
     }
 
     @Test
     public void testBasicReadWrite() {
 
-        TransactionalKVStore<String,Integer> kvStore = new TransactionalKVStore<String,Integer>();
+        TransactionalKVStore<String, Integer> kvStore = new TransactionalKVStore<String, Integer>();
 
         final String KEY1 = "key1";
         final int VALUE1 = 5;
@@ -63,9 +63,9 @@ public class TestTransactionStore<K,V> {
         kvStore.write(KEY1, VALUE1, transactionId);
         kvStore.read(KEY1, transactionId);
 
-        List<TransactionalKVStore.TransactionalUnit<String,Integer>> committedTransactions = kvStore.commit(transactionId);
-        TransactionalKVStore.TransactionalUnit<String,Integer> readOutput = committedTransactions.get(1);
-        Assert.assertEquals((Integer)VALUE1, (Integer)readOutput.getValue());
+        List<TransactionalKVStore.TransactionalUnit<String, Integer>> committedTransactions = kvStore.commit(transactionId);
+        TransactionalKVStore.TransactionalUnit<String, Integer> readOutput = committedTransactions.get(1);
+        Assert.assertEquals((Integer) VALUE1, (Integer) readOutput.getValue());
     }
 
     @Test
@@ -73,7 +73,7 @@ public class TestTransactionStore<K,V> {
     // results that are on consistent
     public void testAtomicWrites() {
 
-        TransactionalKVStore<String,Integer> kvStore = new TransactionalKVStore<String,Integer>();
+        TransactionalKVStore<String, Integer> kvStore = new TransactionalKVStore<String, Integer>();
 
         final int INITIAL_WRITE_TRANSACTION = 0;
         final int INITIAL_READ_TRANSACTION = INITIAL_WRITE_TRANSACTION + 1;
