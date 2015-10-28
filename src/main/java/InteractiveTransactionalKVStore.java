@@ -24,13 +24,12 @@ import java.util.*;
  */
 public class InteractiveTransactionalKVStore<K, V> {
 
-    private Map<K, V> store;
-
     Set<K> keysEnqueuedInTransactions;
     // A mapping of the transaction to the keys it will use. Starts with a copy of the keys
     // and maintains a state. We can get away with this because we know apriori which keys will
     // be used/modified
     Map<Integer, Map<K, V>> transactionsAndKeys;
+    private Map<K, V> store;
 
     {
         store = new HashMap<K, V>();

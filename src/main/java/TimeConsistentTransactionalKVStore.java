@@ -134,12 +134,10 @@ public class TimeConsistentTransactionalKVStore<K, V> {
                     " is no transaction available with transaction id " + transactionId);
         }
 
-
-        int numConflictingKeys = needToRollBack(transaction);
-        if (numConflictingKeys > 0) {
+        if (needToRollBack(transaction)) {
             transactionsAndState.remove(transaction);
             transactionsInFlight.remove(transactionId);
-            throw new RetryLaterException(numConflictingKeys);
+            throw new RetryLaterException("need to roll back transaction " + transactionId);
         }
 
         // Now that we know that nothing needs to be rolled back from this transaction
@@ -174,6 +172,8 @@ public class TimeConsistentTransactionalKVStore<K, V> {
                     //update
                     currentV.setLastRead(((TransactionalKVStore.IsolatedRead<K, V>) transactionalUnit).getTimeStamp());
                 }
+            } else {
+                throw new IllegalStateException("Unrecognized form of Transaction");
             }
         }
 
@@ -189,15 +189,47 @@ public class TimeConsistentTransactionalKVStore<K, V> {
     /* Check that since the transaction started, that no conflicting things have happened in the
      * master store
      */
-    private int needToRollBack(Transaction t) {
+    private boolean needToRollBack(Transaction t) {
 
-        int numKeysThatPreventCommit = 0;
         for (TransactionalKVStore.TransactionalUnit unit : transactionsInFlight.get(t)) {
 
+            final Date T_START_TIME = t.getStartTime();
 
+            // Rule 1:
+            if (unit instanceof TransactionalKVStore.ValueChange) {
+
+                final K KEY = (K) unit.getKey();
+                // if you're writing, make sure that there are no one has read the value since you started your transaction
+                MetadataValue<V> returnedValue = masterMap.get(KEY);
+                if (returnedValue != null) {
+                    final Date LAST_MASTER_READ = masterMap.get(KEY).getLastRead();
+                    if (LAST_MASTER_READ != null && LAST_MASTER_READ.after(T_START_TIME)) {
+                        System.out.println("Transaction " + t.getId() + " key " + KEY + ", for which there was a write transaction at "
+                                + unit.getTimeStamp().getTime() + ", was read at " +
+                                LAST_MASTER_READ.getTime() + " which is after the transaction started");
+                        return true;
+                    }
+                }
+
+            } else if (unit instanceof TransactionalKVStore.IsolatedRead) {
+
+                // if you're reading, make sure that no one has written since your transaction started
+                final K KEY = (K) unit.getKey();
+                // if you're writing, make sure that there are no one has read the value since you started your transaction
+                final Date LAST_MASTER_WRITTEN = masterMap.get(KEY).getLastWritten();
+                if (LAST_MASTER_WRITTEN.after(T_START_TIME)) {
+                    System.out.println("Transaction " + t.getId() + " key " + KEY + ", for which there was a read transaction at "
+                            + unit.getTimeStamp().getTime() + ", was written at " +
+                            LAST_MASTER_WRITTEN.getTime() + " which is after the transaction started");
+                    return true;
+                }
+
+            } else {
+                throw new IllegalStateException("Unrecognized form of Transaction");
+            }
         }
 
-        return numKeysThatPreventCommit;
+        return false;
     }
 
     public class TransactionValue<V> {

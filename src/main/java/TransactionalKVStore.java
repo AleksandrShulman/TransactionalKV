@@ -1,4 +1,3 @@
-import java.sql.Timestamp;
 import java.util.*;
 
 /**
@@ -98,24 +97,22 @@ public class TransactionalKVStore<K, V> {
     public abstract static class TransactionalUnit<K, V> {
 
         abstract K getKey();
+
         abstract Date getTimeStamp();
+
         abstract V getValue();
     }
 
     public static class IsolatedRead<K, V> extends TransactionalUnit {
 
+        final private Date timestamp;
         private K key;
         private V value;
-        final private Date timestamp;
 
         public IsolatedRead(K key) {
 
             this.key = key;
             this.timestamp = new Date();
-        }
-
-        public void setValue(V value) {
-            this.value = value;
         }
 
         public K getKey() {
@@ -128,6 +125,10 @@ public class TransactionalKVStore<K, V> {
 
         Object getValue() {
             return this.value;
+        }
+
+        public void setValue(V value) {
+            this.value = value;
         }
     }
 

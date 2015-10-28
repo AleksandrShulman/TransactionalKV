@@ -25,6 +25,10 @@ public class TestInteractiveTransactionStore {
     final int MAX_FAILED_ATTEMPTS_TO_LOCK = 5;
 
     @Test
+    /**
+     * Given: A known value that is incremented by a transaction
+     * Assert: The returned value is correct
+     */
     public void testIncrement() throws InterruptedException {
 
         //Initialize with initial value
@@ -84,6 +88,10 @@ public class TestInteractiveTransactionStore {
     }
 
     @Test
+    /**
+     * Given: A transaction that attempts to lock keys that are part of a transaction already begun, but not yet committed
+     * Assert: The second transaction cannot obtain a lock on those keys and proper error handling is done
+     */
     public void testLockingCausesException() throws InterruptedException {
 
         InteractiveTransactionalKVStore<String, Integer> ikv = new InteractiveTransactionalKVStore<String, Integer>();
@@ -112,7 +120,10 @@ public class TestInteractiveTransactionStore {
 
     @Test
     /**
-     * Verify that the code that handles the double-buffered data structure does so without losing data.
+     * Given: Initial KV values for key{1..3}, perform an update key{2..3} and then an insert on key4.
+     * Assert that: The final values are correct
+     *
+     * Explanation: The code that handles the double-buffered data structure does so without losing data.
      * This is a white-box test that tries to expose potential weaknesses in how we handle temporary data
      * structures in the KV store.
      */
@@ -129,11 +140,11 @@ public class TestInteractiveTransactionStore {
         final Integer VALUE_3 = (int) (Math.random() * 50);
         final Integer VALUE_4 = (int) (Math.random() * 50);
 
-        //Initialize with the first set of values
-        final Map<String, Integer> initialDataMap = new HashMap<String, Integer>();
-        initialDataMap.put(KEY_1, VALUE_1);
-        initialDataMap.put(KEY_2, VALUE_2);
-        initialDataMap.put(KEY_3, VALUE_3);
+        //Data map will store what we imagine the values to be in the KV
+        final Map<String, Integer> expectedKVs = new HashMap<String, Integer>();
+        expectedKVs.put(KEY_1, VALUE_1);
+        expectedKVs.put(KEY_2, VALUE_2);
+        expectedKVs.put(KEY_3, VALUE_3);
 
         InteractiveTransactionalKVStore<String, Integer> ikv = new InteractiveTransactionalKVStore<String, Integer>();
         final int FIRST_COMMIT = 0;
@@ -148,9 +159,9 @@ public class TestInteractiveTransactionStore {
         INITIAL_KEY_LIST.add(KEY_3);
 
         beginAndWait(ikv, FIRST_COMMIT, INITIAL_KEY_LIST, MAX_FAILED_ATTEMPTS_TO_LOCK);
-        for (String key : initialDataMap.keySet()) {
+        for (String key : expectedKVs.keySet()) {
 
-            ikv.write(key, initialDataMap.get(key), FIRST_COMMIT);
+            ikv.write(key, expectedKVs.get(key), FIRST_COMMIT);
         }
 
         ikv.commit(FIRST_COMMIT);
@@ -165,9 +176,9 @@ public class TestInteractiveTransactionStore {
 
         //Verify data from K1, K2, and K3 is present.
         beginAndWait(ikv, THIRD_COMMIT, INITIAL_KEY_LIST, MAX_FAILED_ATTEMPTS_TO_LOCK);
-        for (String key : initialDataMap.keySet()) {
+        for (String key : expectedKVs.keySet()) {
 
-            Assert.assertEquals(initialDataMap.get(key), ikv.read(key, THIRD_COMMIT));
+            Assert.assertEquals(expectedKVs.get(key), ikv.read(key, THIRD_COMMIT));
         }
 
         ikv.commit(THIRD_COMMIT);
@@ -186,22 +197,26 @@ public class TestInteractiveTransactionStore {
         ikv.commit(FOURTH_COMMIT);
 
         //Verify that data from K1, K2, K3, and K4 is present.
-        initialDataMap.put(KEY_2, NEW_VALUE_2);
-        initialDataMap.put(KEY_3, NEW_VALUE_3);
-        initialDataMap.put(KEY_4, VALUE_4);
+        expectedKVs.put(KEY_2, NEW_VALUE_2);
+        expectedKVs.put(KEY_3, NEW_VALUE_3);
+        expectedKVs.put(KEY_4, VALUE_4);
 
         INITIAL_KEY_LIST.add(KEY_4);
 
         beginAndWait(ikv, FIFTH_COMMIT, INITIAL_KEY_LIST, MAX_FAILED_ATTEMPTS_TO_LOCK);
-        for (String key : initialDataMap.keySet()) {
+        for (String key : expectedKVs.keySet()) {
 
-            Assert.assertEquals(initialDataMap.get(key), ikv.read(key, FIFTH_COMMIT));
+            Assert.assertEquals(expectedKVs.get(key), ikv.read(key, FIFTH_COMMIT));
         }
 
         ikv.commit(FIFTH_COMMIT);
     }
 
     @Test
+    /**
+     * Given: A set of simultaneous commits on key{2,3} and key4
+     * Asser that: Outcome is correct once all values are committed
+     */
     public void testInterleavedCommit() throws InterruptedException {
 
         //add some data
@@ -215,7 +230,7 @@ public class TestInteractiveTransactionStore {
         final Integer VALUE_3 = (int) (Math.random() * 50);
         final Integer VALUE_4 = (int) (Math.random() * 50);
 
-        //Initialize with the first set of values. DataMap reflects the expected source of truth for the system
+        //Initialize with the first set of values. Data structure reflects the expected source of truth for the system
         final Map<String, Integer> expectedKVs = new HashMap<String, Integer>();
         expectedKVs.put(KEY_1, VALUE_1);
         expectedKVs.put(KEY_2, VALUE_2);

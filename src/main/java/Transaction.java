@@ -13,7 +13,7 @@ public class Transaction {
 
         startTime = new Date();
         this.id = transactionId;
-   }
+    }
 
     public int getId() {
         return id;

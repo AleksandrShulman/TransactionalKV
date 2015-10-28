@@ -14,20 +14,20 @@ public class MetadataValue<V> {
         return value;
     }
 
-    public Date getLastRead() {
-        return lastRead;
-    }
-
-    public Date getLastWritten() {
-        return lastWritten;
-    }
-
     public void setValue(V value) {
         this.value = value;
     }
 
+    public Date getLastRead() {
+        return lastRead;
+    }
+
     public void setLastRead(Date lastRead) {
         this.lastRead = lastRead;
+    }
+
+    public Date getLastWritten() {
+        return lastWritten;
     }
 
     public void setLastWritten(Date lastWritten) {
