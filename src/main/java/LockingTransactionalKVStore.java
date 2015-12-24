@@ -7,12 +7,12 @@ import java.util.*;
  * had key A->8, we can increment it by 10 and write it back. This interactivity is the reason for the name of the class.
  * <p/>
  * Why:
- * This is a strict improvement over TestTransactionStore because we now have the capability to change the transaction
+ * This is a strict improvement over StaticTransactionalTransactionStore because we now have the capability to change the transaction
  * based on what a read operation returns mid-transaction (i.e. read is not void here).
  * <p/>
  * How:
  * This is done by getting a lock on all the keys that are to be involved in the transaction. These must be known apriori.
- * The keys will be locked, and a client backoff mechanism will be necessary if and when a client lock cannot be
+ * The keys will be locked, and a client back-off mechanism will be necessary if and when a client lock cannot be
  * immediately obtained.
  * <p/>
  * Limitations:
@@ -22,7 +22,7 @@ import java.util.*;
  * @param <K>
  * @param <V>
  */
-public class InteractiveTransactionalKVStore<K, V> {
+public class LockingTransactionalKVStore<K, V> {
 
     Set<K> keysEnqueuedInTransactions;
     // A mapping of the transaction to the keys it will use. Starts with a copy of the keys
@@ -63,7 +63,7 @@ public class InteractiveTransactionalKVStore<K, V> {
         }
     }
 
-    // This is different than what is in the TransactionalKVStore because this actually returns a value
+    // This is different than what is in the StaticTransactionalKVStore because this actually returns a value
     // Note though that you should read a value that you've already written
     public V read(K key, int transactionId) {
 
@@ -74,7 +74,7 @@ public class InteractiveTransactionalKVStore<K, V> {
         return transactionsAndKeys.get(transactionId).get(key);
     }
 
-    // This is different than what is in the TransactionalKVStore because this actually returns a value
+    // This is different than what is in the StaticTransactionalKVStore because this actually returns a value
     public void write(K key, V value, int transactionId) {
 
         //The logic is that we already have checked that nothing else will be operating on the returned value

@@ -13,6 +13,7 @@ public class Transaction {
 
         startTime = new Date();
         this.id = transactionId;
+        System.out.println("Starting transaction " + transactionId + " at " + startTime.getTime());
     }
 
     public int getId() {

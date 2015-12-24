@@ -1,0 +1,10 @@
+TransactionalKVStore$ValueChange.class
+TransactionalKVStore$IsolatedRead.class
+TransactionalKVStore.class
+Transaction.class
+TimeConsistentTransactionalKVStore$TransactionValue.class
+MetadataValue.class
+InteractiveTransactionalKVStore.class
+TransactionalKVStore$TransactionalUnit.class
+TimeConsistentTransactionalKVStore.class
+RetryLaterException.class

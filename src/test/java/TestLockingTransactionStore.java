@@ -13,10 +13,10 @@ import java.util.logging.Logger;
  */
 
 
-public class TestInteractiveTransactionStore {
+public class TestLockingTransactionStore {
 
     private static final Logger logger =
-            Logger.getLogger(TestTransactionStore.class.getName());
+            Logger.getLogger(TestStaticTransactionStore.class.getName());
 
     static {
         logger.setLevel(Level.FINE);
@@ -32,7 +32,7 @@ public class TestInteractiveTransactionStore {
     public void testIncrement() throws InterruptedException {
 
         //Initialize with initial value
-        InteractiveTransactionalKVStore<String, Integer> ikv = new InteractiveTransactionalKVStore<String, Integer>();
+        LockingTransactionalKVStore<String, Integer> ikv = new LockingTransactionalKVStore<String, Integer>();
         final int FIRST_COMMIT = 0;
         final String KEY = "key1";
         final int VALUE1 = (int) Math.random() * 50;
@@ -68,7 +68,7 @@ public class TestInteractiveTransactionStore {
     }
 
 
-    public void beginAndWait(InteractiveTransactionalKVStore kv, int transactionId,
+    public void beginAndWait(LockingTransactionalKVStore kv, int transactionId,
                              List<String> keysToLock, int MAX_ATTEMPTS) throws InterruptedException {
 
         int attempts = 0;
@@ -94,7 +94,7 @@ public class TestInteractiveTransactionStore {
      */
     public void testLockingCausesException() throws InterruptedException {
 
-        InteractiveTransactionalKVStore<String, Integer> ikv = new InteractiveTransactionalKVStore<String, Integer>();
+        LockingTransactionalKVStore<String, Integer> ikv = new LockingTransactionalKVStore<String, Integer>();
         final int FIRST_COMMIT = 0;
 
         final String KEY = "key1";
@@ -146,7 +146,7 @@ public class TestInteractiveTransactionStore {
         expectedKVs.put(KEY_2, VALUE_2);
         expectedKVs.put(KEY_3, VALUE_3);
 
-        InteractiveTransactionalKVStore<String, Integer> ikv = new InteractiveTransactionalKVStore<String, Integer>();
+        LockingTransactionalKVStore<String, Integer> ikv = new LockingTransactionalKVStore<String, Integer>();
         final int FIRST_COMMIT = 0;
         final int SECOND_COMMIT = FIRST_COMMIT + 1;
         final int THIRD_COMMIT = SECOND_COMMIT + 1;
@@ -236,7 +236,7 @@ public class TestInteractiveTransactionStore {
         expectedKVs.put(KEY_2, VALUE_2);
         expectedKVs.put(KEY_3, VALUE_3);
 
-        InteractiveTransactionalKVStore<String, Integer> ikv = new InteractiveTransactionalKVStore<String, Integer>();
+        LockingTransactionalKVStore<String, Integer> ikv = new LockingTransactionalKVStore<String, Integer>();
         final int FIRST_COMMIT = 0;
         final int SECOND_COMMIT = FIRST_COMMIT + 1;
         final int THIRD_COMMIT = SECOND_COMMIT + 1;

@@ -1,4 +1,7 @@
-import org.junit.*;
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.util.List;
 import java.util.logging.Level;
@@ -8,10 +11,10 @@ import java.util.logging.Logger;
  * A basic KV store that supports atomic sets of reads and writes. This isn't a truly atomic store because
  * there is no all-or-nothing behavior in the case of failure.
  */
-public class TestTransactionStore<K, V> {
+public class TestStaticTransactionStore<K, V> {
 
     private static final Logger logger =
-            Logger.getLogger(TestTransactionStore.class.getName());
+            Logger.getLogger(TestStaticTransactionStore.class.getName());
 
     static {
         logger.setLevel(Level.INFO);
@@ -41,19 +44,10 @@ public class TestTransactionStore<K, V> {
     // Maybe you can send it back, but then not allow any transactions to execute that have that value as a key??
     // What if the client takes forever? We can add a reasonable timeout. Might involve a callback. Ugly.
 
-    // But it's super-ugly to have a transaction span multiple machines
-    @Test
-    @Ignore
-    public void testSimultaneousAppends() {
-
-        TransactionalKVStore<String, Integer> kvStore = new TransactionalKVStore<String, Integer>();
-        //TODO: Finish this when implementing returns from a read operation that hasn't been committed
-    }
-
     @Test
     public void testBasicReadWrite() {
 
-        TransactionalKVStore<String, Integer> kvStore = new TransactionalKVStore<String, Integer>();
+        StaticTransactionalKVStore<String, Integer> kvStore = new StaticTransactionalKVStore<String, Integer>();
 
         final String KEY1 = "key1";
         final int VALUE1 = 5;
@@ -63,17 +57,17 @@ public class TestTransactionStore<K, V> {
         kvStore.write(KEY1, VALUE1, transactionId);
         kvStore.read(KEY1, transactionId);
 
-        List<TransactionalKVStore.TransactionalUnit<String, Integer>> committedTransactions = kvStore.commit(transactionId);
-        TransactionalKVStore.TransactionalUnit<String, Integer> readOutput = committedTransactions.get(1);
+        List<StaticTransactionalKVStore.TransactionalUnit<String, Integer>> committedTransactions = kvStore.commit(transactionId);
+        StaticTransactionalKVStore.TransactionalUnit<String, Integer> readOutput = committedTransactions.get(1);
         Assert.assertEquals((Integer) VALUE1, (Integer) readOutput.getValue());
     }
 
     @Test
     // Verify that a multi-read transaction conducted at the same time as an atomic set of writes on those values produces
     // results that are on consistent
-    public void testAtomicWrites() {
+    public void testAtomicWrites() throws InterruptedException {
 
-        TransactionalKVStore<String, Integer> kvStore = new TransactionalKVStore<String, Integer>();
+        StaticTransactionalKVStore<String, Integer> kvStore = new StaticTransactionalKVStore<String, Integer>();
 
         final int INITIAL_WRITE_TRANSACTION = 0;
         final int INITIAL_READ_TRANSACTION = INITIAL_WRITE_TRANSACTION + 1;
@@ -90,21 +84,23 @@ public class TestTransactionStore<K, V> {
         final Integer VALUE2_1 = VALUE2_0 + INCREMENT;
 
         kvStore.begin(INITIAL_WRITE_TRANSACTION);
+        Thread.sleep(50);
+        kvStore.begin(INITIAL_READ_TRANSACTION);
+
         kvStore.write(KEY1, VALUE1_0, INITIAL_WRITE_TRANSACTION);
+        kvStore.read(KEY2, INITIAL_READ_TRANSACTION);
         kvStore.write(KEY2, VALUE2_0, INITIAL_WRITE_TRANSACTION);
         kvStore.commit(INITIAL_WRITE_TRANSACTION);
 
         //begin the read transaction but don't commit it!
-        kvStore.begin(INITIAL_READ_TRANSACTION);
         kvStore.read(KEY1, INITIAL_READ_TRANSACTION);
-        kvStore.read(KEY2, INITIAL_READ_TRANSACTION);
 
         kvStore.begin(INCREMENT_TRANSACTION);
         kvStore.write(KEY1, VALUE1_1, INCREMENT_TRANSACTION);
         kvStore.write(KEY2, VALUE2_1, INCREMENT_TRANSACTION);
         kvStore.commit(INCREMENT_TRANSACTION);
 
-        List<TransactionalKVStore.TransactionalUnit<String, Integer>> readResults = kvStore.commit(INITIAL_READ_TRANSACTION);
+        List<StaticTransactionalKVStore.TransactionalUnit<String, Integer>> readResults = kvStore.commit(INITIAL_READ_TRANSACTION);
 
         final Integer READ_1_OUTPUT = readResults.get(0).getValue();
         final Integer READ_2_OUTPUT = readResults.get(1).getValue();

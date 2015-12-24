@@ -4,7 +4,7 @@
 public class RetryLaterException extends Exception {
 
     final String LOCALIZED_MESSAGE;
-    private int msToWait = 1000;
+    private int msToWait = 250;
 
     public RetryLaterException(int numMatches) {
         this.msToWait = 100 + 50 * numMatches;
@@ -22,6 +22,8 @@ public class RetryLaterException extends Exception {
     }
 
     public int getWaitTimeMs() {
+        this.msToWait = this.msToWait + (int) (Math.random() * 100);
+        System.out.println("Directing to wait " + this.msToWait + " milliseconds");
         return this.msToWait;
     }
 }
