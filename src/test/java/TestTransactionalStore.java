@@ -317,8 +317,6 @@ public class TestTransactionalStore {
         final int INITIAL_VALUE = 5;
         final int INCR_VALUE = 204;
 
-        //The initial commit sets the
-
         // Start one transaction on the value for increment
         store.begin(INITIAL_WRITE_TRANSACTION);
         store.write(KEY_1, INITIAL_VALUE, INITIAL_WRITE_TRANSACTION);
