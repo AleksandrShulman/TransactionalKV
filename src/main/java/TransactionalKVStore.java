@@ -28,7 +28,7 @@ import java.util.*;
  */
 public class TransactionalKVStore<K, V> {
 
-    final int DEFAULT_MAX_HANDLED_ATTEMPTS = 5;
+    final int DEFAULT_MAX_HANDLED_ATTEMPTS = 1;
     private final int SLEEP_CONST_MS = 5;
     //The master copy of the data. Considered the source of truth. Only updated in the commit function.
     volatile HashMap<K, MetadataValue<V>> masterMap = new HashMap<K, MetadataValue<V>>();
@@ -209,6 +209,7 @@ public class TransactionalKVStore<K, V> {
 
         // Add some padding to make sure that events that are not supposed to occur in
         // the same milliseconds aren't treated as though they do
+        Thread.sleep(SLEEP_CONST_MS);
         final Date COMMIT_START_TIME = new Date();
 
         System.out.println(COMMIT_START_TIME.getTime() + "--Will attempt to commit on transactionId " + transactionId);
@@ -281,6 +282,7 @@ public class TransactionalKVStore<K, V> {
         transactionIdToObjectMapping.remove(transactionId); //we will no longer need to do lookups
 
         System.out.println(new Date().getTime() + "--Just finished commit on transactionId " + transactionId);
+        Thread.sleep(SLEEP_CONST_MS);
     }
 
     private Transaction validateTransactionId(int transactionId) {
