@@ -14,8 +14,68 @@ public class TestTransactionalStore {
     final static String KEY_1 = "key1";
     final Integer VALUE_1 = 42;
     public static TransactionalKVStore.ReplayableTransactionWrapper CONTEXT_FREE_INCREMENT_ACTION;
+    public static TransactionalKVStore.ReplayableTransactionWrapper FIBONACCI_ACTION;
 
     static {
+
+        /*
+        This action will calculate the Fibonacci sequence.
+        The key "size" is the size of the list.
+        The algorithm will use the value of size to set the value(size)'th key
+         */
+        FIBONACCI_ACTION =
+                new TransactionalKVStore.ReplayableTransactionWrapper() {
+                    @Override
+                    public void runReplayableTransaction(Object[] arguments, TransactionalKVStore
+                            store, int maxAttempts) throws RetryLaterException, InterruptedException {
+
+                        // This is the number of elements in the Array
+                        final String SIZE_KEY = "size";
+
+                        final int REPLAYABLE_T_ID = sharedTransactionCounter.incrementAndGet();
+                        store.begin(REPLAYABLE_T_ID);
+
+                        // read in the size
+                        Object currentSize = store.read(SIZE_KEY, REPLAYABLE_T_ID);
+                        if (currentSize == null) {
+
+                            //initialize the array
+                            store.write("0",0L, REPLAYABLE_T_ID );
+                            store.write("1",1L, REPLAYABLE_T_ID );
+                            store.write(SIZE_KEY, 2L, REPLAYABLE_T_ID);
+                            store.commit(REPLAYABLE_T_ID);
+
+                        } else {
+
+                            // We want to write to the index that is the current value of size
+                            // Then we want to increment size
+
+
+                            Long previousValue = (Long) store.read(String.valueOf((Long)currentSize
+                                            - 2),
+                                    REPLAYABLE_T_ID);
+                            Long currentValue = (Long) store.read(String.valueOf((Long)currentSize
+                                            -1L),
+                                    REPLAYABLE_T_ID );
+
+                            if (currentValue == null) {
+                                throw new IllegalStateException("A value was null for key " +
+                                        ((Long)currentSize - 1L) );
+                            }
+
+                            if (previousValue == null) {
+                                throw new IllegalStateException("A value was null for key " +
+                                        ((Long)currentSize - 2L) );
+                            }
+
+                            Long newValue = previousValue + currentValue;
+                            store.write(String.valueOf(currentSize), newValue, REPLAYABLE_T_ID);
+                            store.write(SIZE_KEY, (Long)currentSize + 1, REPLAYABLE_T_ID);
+                            store.commit(REPLAYABLE_T_ID);
+                        }
+                    }
+                };
+
         CONTEXT_FREE_INCREMENT_ACTION =
                 new TransactionalKVStore.ReplayableTransactionWrapper() {
                     @Override
@@ -25,7 +85,7 @@ public class TestTransactionalStore {
                         // Very important that this all relies on the arguments being parsed
                         // correctly
 
-                        // Args: KEY, INCREMENT_AMOUNT, this.MAX_FAILED_ATTEMPTS, clientId
+                        // Args: KEY, INCREMENT_AMOUNT
                         String KEY = (String) arguments[0];
                         int INCR_VALUE = (Integer) arguments[1];
 
@@ -56,13 +116,9 @@ public class TestTransactionalStore {
      * @param AMOUNT
      * @throws InterruptedException
      */
-    public static void client_side_increment(TransactionalKVStore<String, Integer> store, final String KEY, final int AMOUNT, final int MAX_FAILED_ATTEMPTS) throws InterruptedException {
 
-        final int DEFAULT_CLIENT_ID = 0;
-        client_side_increment(store, KEY, AMOUNT, MAX_FAILED_ATTEMPTS, DEFAULT_CLIENT_ID);
-    }
-
-    public static void client_side_increment(TransactionalKVStore<String, Integer> store, final String KEY, final int AMOUNT, final int MAX_FAILED_ATTEMPTS, int clientId) throws InterruptedException {
+    public static void client_side_increment(TransactionalKVStore<String, Integer> store, final
+    String KEY, final int AMOUNT, final int MAX_FAILED_ATTEMPTS) throws InterruptedException {
 
         int attempts = 0;
         while (true) {
@@ -73,10 +129,8 @@ public class TestTransactionalStore {
             try {
 
                 //do some logic
-                System.out.println("Client " + clientId + ": starting on transaction " + transactionId);
                 store.begin(transactionId);
                 Integer someValue = store.read(KEY, transactionId);
-                System.out.println("Client " + clientId + ": At transactionId " + transactionId + " someValue is " + someValue);
                 Integer newValue = someValue + AMOUNT;
                 store.write(KEY, newValue, transactionId);
 
@@ -99,17 +153,10 @@ public class TestTransactionalStore {
     public static void server_side_increment(TransactionalKVStore<String, Integer> store, final
     String KEY, final int AMOUNT, final int MAX_FAILED_ATTEMPTS) throws InterruptedException {
 
-        final int DEFAULT_CLIENT_ID = 0;
-        server_side_increment(store, KEY, AMOUNT, MAX_FAILED_ATTEMPTS, DEFAULT_CLIENT_ID);
-    }
-
-    public static void server_side_increment(TransactionalKVStore<String, Integer> store, final
-    String KEY, final int AMOUNT, final int MAX_FAILED_ATTEMPTS, int clientId) throws InterruptedException {
-
         // Define the transaction
 
         // Send it over
-        store.submitReplayableTransaction(
+        TransactionalKVStore.submitReplayableTransaction(
                 CONTEXT_FREE_INCREMENT_ACTION, new Object[]{KEY, AMOUNT, MAX_FAILED_ATTEMPTS}, store);
     }
 

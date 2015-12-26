@@ -35,6 +35,81 @@ public class TestTransactionalStoreParallelClients {
         runRepeatedParallelIncrementSingleKey(false);
     }
 
+    /**
+     * Given:  A KV store and the Fibonnacci Transaction, and a set of parallel clients
+     * Verify: The KV store maintains a proper Fibonacci sequence
+     */
+    @Test
+    public void testFibonacciSequenceFromParallelClients() throws InterruptedException, ExecutionException {
+
+        final int CONCURRENT_CLIENTS = 6;
+        final int FIBONACCI_TRANSACTIONS_PER_CLIENT = 15;
+        final int MAX_FAILED_ATTEMPTS = 100;
+        final TransactionalKVStore<String, Long> store =
+                new TransactionalKVStore<String, Long>();
+
+        ExecutorService execService = Executors.newFixedThreadPool(CONCURRENT_CLIENTS);
+        List<Future> futureList = new ArrayList<Future>();
+        for (int i = 0; i < CONCURRENT_CLIENTS; i++) {
+
+            // Stagger client starts
+            Thread.sleep((int) (Math.random() * 50));
+
+            futureList.add(execService.submit(new FibonacciClient(store, i,
+                    FIBONACCI_TRANSACTIONS_PER_CLIENT, MAX_FAILED_ATTEMPTS)));
+        }
+
+        execService.shutdown();
+        final int TIMEOUT_SECONDS = 90;
+        Thread.sleep(3000);
+        execService.awaitTermination(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        for (Future f : futureList) {
+            if (f.get() != null || !f.isDone() || f.isCancelled()) {
+                System.out.println("Exited in disgrace!");
+                throw new RuntimeException("Problem");
+            }
+        }
+
+        // Validation of results
+        final int FINAL_TRANSACTION_ID =
+                TestTransactionalStore.sharedTransactionCounter.addAndGet(1);
+        store.begin(FINAL_TRANSACTION_ID);
+        final String SIZE_KEY = "size";
+
+        final Long size = store.read(SIZE_KEY, FINAL_TRANSACTION_ID);
+
+        if (size == null) {
+            Assert.fail("Size should never be null");
+        }
+
+        // The index of the last item will be size -1
+        final Long finalValue = store.read(String.valueOf(size -1), FINAL_TRANSACTION_ID);
+        final Long previousValue = store.read(String.valueOf(size - 2), FINAL_TRANSACTION_ID);
+        final Long prePreviousValue = store.read(String.valueOf(size - 3),
+                FINAL_TRANSACTION_ID);
+
+        Assert.assertEquals("The final state did not have the values add up properly. Expected " +
+                prePreviousValue + " + " + previousValue + " = " + finalValue ,(Long)
+                (previousValue +
+                prePreviousValue), finalValue);
+
+        final Long NUMBER_SUCCESSFUL_TRANSACTIONS = Long.valueOf
+                (FIBONACCI_TRANSACTIONS_PER_CLIENT) *
+                CONCURRENT_CLIENTS;
+        final Long EXPECTED_SIZE = 1 + NUMBER_SUCCESSFUL_TRANSACTIONS;
+
+
+
+        System.out.println("The final state is " +
+                prePreviousValue + " + " + previousValue + " = " + finalValue + " with " + size +
+       " items present." );
+
+        Assert.assertEquals("The final size. " +
+                        "Check that Fibonacci transactions are not overwriting one another",
+                EXPECTED_SIZE, size);
+    }
+
     private void runRepeatedParallelIncrementSingleKey(boolean serverSide)
             throws InterruptedException, ExecutionException {
         final int CONCURRENT_CLIENTS = 50;
@@ -91,6 +166,8 @@ public class TestTransactionalStoreParallelClients {
                 (INCREMENTS_PER_CLIENT * INCREMENT_AMOUNT * CONCURRENT_CLIENTS);
         Assert.assertEquals("The final output did not match. " +
                 "Check that appends are not overwriting one another", EXPECTED_RESULT, result);
+
+
     }
 
     /*
@@ -128,19 +205,62 @@ public class TestTransactionalStoreParallelClients {
                 try {
 
                     System.out.println(
-                            "Starting client_side_increment " + i + " from client " + clientId);
+                            "Starting increment transaction " + i + " from client " + clientId);
                     if (serverSide) {
 
                         TestTransactionalStore.server_side_increment(
-                                store, KEY, INCREMENT_AMOUNT, this.MAX_FAILED_ATTEMPTS, clientId);
+                                store, KEY, INCREMENT_AMOUNT, this.MAX_FAILED_ATTEMPTS);
 
                     } else {
                         TestTransactionalStore.client_side_increment(
-                                store, KEY, INCREMENT_AMOUNT, this.MAX_FAILED_ATTEMPTS, clientId);
+                                store, KEY, INCREMENT_AMOUNT, this.MAX_FAILED_ATTEMPTS);
                     }
 
                     System.out.println(
                             "Done with increment " + i + " from client " + clientId);
+
+                } catch (InterruptedException e) {
+
+                    System.out.println("ite msg 2: Caught interrupted exception");
+                    throw new RuntimeException("Transaction was interrupted. This is bad.");
+                }
+            }
+
+            // Each thread will sleep 10 seconds just to give the others time to catch up, if necessary
+            System.out.println("Client id " + clientId + " done");
+        }
+    }
+
+
+    protected static class FibonacciClient implements Runnable {
+
+        int clientId;
+        TransactionalKVStore<String, Long> store;
+        int MAX_FAILED_ATTEMPTS;
+        int TRANSACTIONS_PER_CLIENT;
+
+        public FibonacciClient(TransactionalKVStore<String, Long> store, final
+        int clientId, final int TRANSACTIONS_PER_CLIENT,
+                               final int MAX_FAILED_ATTEMPTS) {
+            this.clientId = clientId;
+            this.store = store;
+            this.MAX_FAILED_ATTEMPTS = MAX_FAILED_ATTEMPTS;
+            this.TRANSACTIONS_PER_CLIENT = TRANSACTIONS_PER_CLIENT;
+        }
+
+        public void run() {
+
+            for (int i = 1; i < (TRANSACTIONS_PER_CLIENT + 1); i++) {
+                try {
+
+                    System.out.println(
+                            "Starting Fibonacci transaction " + i + " from client " + clientId);
+
+                    TransactionalKVStore.submitReplayableTransaction(TestTransactionalStore
+                            .FIBONACCI_ACTION, new Object[]{}, store);
+
+                    System.out.println(
+                            "Done with Fibonacci transaction " + i + " from client " + clientId);
 
                 } catch (InterruptedException e) {
 
