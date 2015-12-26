@@ -46,7 +46,7 @@ public class TestLockingTransactionStore {
         ikv.write(KEY, VALUE1, FIRST_COMMIT);
         ikv.commit(FIRST_COMMIT);
 
-        //Now perform the increment
+        //Now perform the client_side_increment
         int SECOND_COMMIT = FIRST_COMMIT + 1;
         beginAndWait(ikv, SECOND_COMMIT, INITIAL_KEY_LIST, MAX_FAILED_ATTEMPTS_TO_LOCK);
         int returnedInitialValue = ikv.read(KEY, SECOND_COMMIT);

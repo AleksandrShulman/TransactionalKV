@@ -11,10 +11,41 @@ public class TestTransactionalStore {
 
     public static AtomicInteger sharedTransactionCounter = new AtomicInteger(0);
     final int DEFAULT_MAX_FAILED_COMMIT_ATTEMPTS = 5;
+    final static String KEY_1 = "key1";
+    final Integer VALUE_1 = 42;
+    public static TransactionalKVStore.ReplayableTransactionWrapper CONTEXT_FREE_INCREMENT_ACTION;
+
+    static {
+        CONTEXT_FREE_INCREMENT_ACTION =
+                new TransactionalKVStore.ReplayableTransactionWrapper() {
+                    @Override
+                    public void runReplayableTransaction(Object[] arguments, TransactionalKVStore
+                            store, int maxAttempts) throws RetryLaterException, InterruptedException {
+
+                        // Very important that this all relies on the arguments being parsed
+                        // correctly
+
+                        // Args: KEY, INCREMENT_AMOUNT, this.MAX_FAILED_ATTEMPTS, clientId
+                        String KEY = (String) arguments[0];
+                        int INCR_VALUE = (Integer) arguments[1];
+
+                        final int REPLAYABLE_T_ID = sharedTransactionCounter.incrementAndGet();
+                        System.out.println("Implementing an append");
+                        store.begin(REPLAYABLE_T_ID);
+                        Integer result = (Integer) store.read(KEY, REPLAYABLE_T_ID);
+                        if (result == null)
+                            result = 0; //if it does not exist, we're incrementing off of 0
+                        int newValue = result + INCR_VALUE;
+                        store.write(KEY, newValue, REPLAYABLE_T_ID);
+                        store.commit(REPLAYABLE_T_ID);
+                    }
+                };
+    }
+
 
     /**
      * Because sometimes we're not able to succeed right away, a user will need to have retry logic. In this case,
-     * I implemented the business logic to increment. A user will need to write something similar to this for
+     * I implemented the business logic to client_side_increment. A user will need to write something similar to this for
      * everything they're working on
      * <p/>
      * TODO: Find a way to re-use the retry logic here around the functional shell. We can use anonymous functions to
@@ -25,13 +56,13 @@ public class TestTransactionalStore {
      * @param AMOUNT
      * @throws InterruptedException
      */
-    public static void increment(TransactionalKVStore<String, Integer> store, final String KEY, final int AMOUNT, final int MAX_FAILED_ATTEMPTS) throws InterruptedException {
+    public static void client_side_increment(TransactionalKVStore<String, Integer> store, final String KEY, final int AMOUNT, final int MAX_FAILED_ATTEMPTS) throws InterruptedException {
 
         final int DEFAULT_CLIENT_ID = 0;
-        increment(store, KEY, AMOUNT, MAX_FAILED_ATTEMPTS, DEFAULT_CLIENT_ID);
+        client_side_increment(store, KEY, AMOUNT, MAX_FAILED_ATTEMPTS, DEFAULT_CLIENT_ID);
     }
 
-    public static void increment(TransactionalKVStore<String, Integer> store, final String KEY, final int AMOUNT, final int MAX_FAILED_ATTEMPTS, int clientId) throws InterruptedException {
+    public static void client_side_increment(TransactionalKVStore<String, Integer> store, final String KEY, final int AMOUNT, final int MAX_FAILED_ATTEMPTS, int clientId) throws InterruptedException {
 
         int attempts = 0;
         while (true) {
@@ -65,6 +96,23 @@ public class TestTransactionalStore {
         }
     }
 
+    public static void server_side_increment(TransactionalKVStore<String, Integer> store, final
+    String KEY, final int AMOUNT, final int MAX_FAILED_ATTEMPTS) throws InterruptedException {
+
+        final int DEFAULT_CLIENT_ID = 0;
+        server_side_increment(store, KEY, AMOUNT, MAX_FAILED_ATTEMPTS, DEFAULT_CLIENT_ID);
+    }
+
+    public static void server_side_increment(TransactionalKVStore<String, Integer> store, final
+    String KEY, final int AMOUNT, final int MAX_FAILED_ATTEMPTS, int clientId) throws InterruptedException {
+
+        // Define the transaction
+
+        // Send it over
+        store.submitReplayableTransaction(
+                CONTEXT_FREE_INCREMENT_ACTION, new Object[]{KEY, AMOUNT, MAX_FAILED_ATTEMPTS}, store);
+    }
+
     @Test
     /**
      * Given: A simple Transactional Key-Value Store
@@ -73,22 +121,20 @@ public class TestTransactionalStore {
     public void testBasicWriteAndRetrieve() throws InterruptedException {
 
         final int T_ID = 1;
-        final String KEY = "MeaningOfLife";
-        final Integer VALUE = 42;
 
         //Write transaction
         TransactionalKVStore<String, Integer> store = new TransactionalKVStore<String, Integer>();
         store.begin(T_ID);
-        store.write(KEY, VALUE, T_ID);
+        store.write(KEY_1, VALUE_1, T_ID);
 
         commitWithException(store, T_ID);
 
         final int T_ID_2 = T_ID + 1;
         store.begin(T_ID_2);
 
-        Integer result = store.read(KEY, T_ID_2);
+        Integer result = store.read(KEY_1, T_ID_2);
 
-        Assert.assertEquals("Results did not match on basic read!", VALUE, result);
+        Assert.assertEquals("Results did not match on basic read!", VALUE_1, result);
         commitWithException(store, T_ID_2);
     }
 
@@ -101,9 +147,6 @@ public class TestTransactionalStore {
     public void testMasterReadAndWriteTimes() throws InterruptedException {
 
         final Date START_TIME = new Date();
-
-        String KEY_1 = "key1";
-        Integer VALUE_1 = 99;
 
         final int T_ID = 1;
         final int T_ID_2 = T_ID + 1;
@@ -141,22 +184,20 @@ public class TestTransactionalStore {
         final int T_ID_2 = T_ID + 1;
         final int T_ID_3 = T_ID_2 + 1;
 
-        final String KEY = "MeaningOfLife";
-        final Integer VALUE = 42;
-        final Integer NEW_VALUE = 43;
+        final Integer NEW_VALUE = VALUE_1 + 1;
 
         //Write transaction
         TransactionalKVStore<String, Integer> tctStore = new TransactionalKVStore<String, Integer>();
         tctStore.begin(T_ID);
-        tctStore.write(KEY, VALUE, T_ID);
+        tctStore.write(KEY_1, VALUE_1, T_ID);
         commitWithException(tctStore, T_ID);
 
         tctStore.begin(T_ID_2);
-        tctStore.write(KEY, NEW_VALUE, T_ID_2);
+        tctStore.write(KEY_1, NEW_VALUE, T_ID_2);
         commitWithException(tctStore, T_ID_2);
 
         tctStore.begin(T_ID_3);
-        Integer result = tctStore.read(KEY, T_ID_3);
+        Integer result = tctStore.read(KEY_1, T_ID_3);
 
         Assert.assertEquals("Results did not match on basic read!", NEW_VALUE, result);
         commitWithException(tctStore, T_ID_3);
@@ -179,7 +220,7 @@ public class TestTransactionalStore {
 
         final int VALUE_1 = 1;
         final int VALUE_2 = 2;
-        final int VALUE_3 = 1;
+        final int VALUE_3 = 99;
 
         final int VERIFY_TRANSACTION = T_ID_3 + 1;
 
@@ -219,7 +260,7 @@ public class TestTransactionalStore {
 
     @Test
     /**
-     * Given:   Overlapping commits that increment a value
+     * Given:   Overlapping commits that client_side_increment a value
      * Assert:  Both increments are considered
      *
      * WARNING: This test fails when run as part of all tests, but passes when run in isolation...
@@ -230,37 +271,31 @@ public class TestTransactionalStore {
 
         final TransactionalKVStore<String, Integer> tctStore = new TransactionalKVStore<String, Integer>();
 
-        // Because this test runs single-threaded, on a faster machine, there will not be enough time change
-        // to cause the transaction manager to detect stale data. So, adding a 1ms sleep is useful here.
-        final int TIME_SPACER_MS = 1;
-
         // Initialize a value
         final int INITIAL_WRITE_TRANSACTION = sharedTransactionCounter.incrementAndGet();
         final int FIRST_INCREMENT_TRANSACTION = sharedTransactionCounter.incrementAndGet();
         final int SECOND_INCREMENT_TRANSACTION = sharedTransactionCounter.incrementAndGet();
         final int VERIFY_TRANSACTION = sharedTransactionCounter.incrementAndGet();
 
-        final String KEY_1 = "key1";
-        final int INITIAL_VALUE = 5;
         final int INCREMENT_AMOUNT_1 = 8;
         final int INCREMENT_AMOUNT_2 = 13;
-        final int EXPECTED_FINAL_VALUE = INITIAL_VALUE + INCREMENT_AMOUNT_1 + INCREMENT_AMOUNT_2;
+        final int EXPECTED_FINAL_VALUE = VALUE_1 + INCREMENT_AMOUNT_1 + INCREMENT_AMOUNT_2;
 
-        // Start one transaction on the value for increment
+        // Start one transaction on the value for client_side_increment
         tctStore.begin(INITIAL_WRITE_TRANSACTION);
-        tctStore.write(KEY_1, INITIAL_VALUE, INITIAL_WRITE_TRANSACTION);
+        tctStore.write(KEY_1, VALUE_1, INITIAL_WRITE_TRANSACTION);
         commitWithException(tctStore, INITIAL_WRITE_TRANSACTION);
 
         // Start a second transaction before the first one is committed
         tctStore.begin(FIRST_INCREMENT_TRANSACTION);
         tctStore.begin(SECOND_INCREMENT_TRANSACTION);
 
-        //Client 1 doing a basic increment
+        //Client 1 doing a basic client_side_increment
         int preFirstIncrementValue = tctStore.read(KEY_1, FIRST_INCREMENT_TRANSACTION);
         int postFirstIncrementValue = preFirstIncrementValue + INCREMENT_AMOUNT_1;
         tctStore.write(KEY_1, postFirstIncrementValue, FIRST_INCREMENT_TRANSACTION);
 
-        //Client 2 doing a basic increment
+        //Client 2 doing a basic client_side_increment
         int preSecondIncrementValue = tctStore.read(KEY_1, SECOND_INCREMENT_TRANSACTION);
 
         int postSecondIncrementValue = preSecondIncrementValue + INCREMENT_AMOUNT_2;
@@ -273,7 +308,7 @@ public class TestTransactionalStore {
             Assert.fail("The server did not instruct the client to retry");
         } catch (RetryLaterException rte) {
 
-            increment(tctStore, KEY_1, INCREMENT_AMOUNT_2, DEFAULT_MAX_FAILED_COMMIT_ATTEMPTS);
+            client_side_increment(tctStore, KEY_1, INCREMENT_AMOUNT_2, DEFAULT_MAX_FAILED_COMMIT_ATTEMPTS);
         }
 
         // Verify the final value is correct
@@ -308,61 +343,69 @@ public class TestTransactionalStore {
     public void testCustomCodePushdown() throws InterruptedException {
 
         final TransactionalKVStore<String, Integer> store = new TransactionalKVStore<String, Integer>();
+        final AtomicInteger transactionId = new AtomicInteger();
+
 
         //Note: This test is testing an odd condition where there is a transaction conflict to append on a value
         // that does not yet exist. This is something of an edge case. For now, I'll add in a call to create this
         // initial value and see how that affects things.
-        final int INITIAL_WRITE_TRANSACTION = 0;
+        final int INITIAL_WRITE_TRANSACTION = transactionId.incrementAndGet();
         final String KEY_1 = "key1";
         final int INITIAL_VALUE = 5;
         final int INCR_VALUE = 204;
 
-        // Start one transaction on the value for increment
+        // Start one transaction on the value for client_side_increment
         store.begin(INITIAL_WRITE_TRANSACTION);
         store.write(KEY_1, INITIAL_VALUE, INITIAL_WRITE_TRANSACTION);
         commitWithException(store, INITIAL_WRITE_TRANSACTION);
 
-        final int T_ID = INITIAL_WRITE_TRANSACTION + 1;
-        final int T_ID_2 = T_ID + 1;
-        final int T_ID_3 = T_ID_2 + 1;
-        final int T_ID_4 = T_ID_3 + 1;
+        final int T_ID = transactionId.incrementAndGet();
+        ;
+        final int T_ID_2 = transactionId.incrementAndGet();
+        ;
+        final int T_ID_3 = transactionId.incrementAndGet();
+        ;
 
         store.begin(T_ID);
         int currentValue = store.read(KEY_1, T_ID);
         store.write(KEY_1, currentValue + INCR_VALUE, T_ID);
 
-        final TransactionalKVStore.ReplayableTransactionWrapper APPEND_ACTION =
+        final TransactionalKVStore.ReplayableTransactionWrapper INCREMENT_ACTION =
                 new TransactionalKVStore.ReplayableTransactionWrapper() {
                     @Override
-                    public void runReplayableTransaction(Object[] arguments) throws RetryLaterException, InterruptedException {
+                    public void runReplayableTransaction(Object[] arguments, TransactionalKVStore
+                            store, int maxAttempts) throws
+                            RetryLaterException, InterruptedException {
+
+                        final int REPLAYABLE_T_ID = transactionId.incrementAndGet();
                         System.out.println("Implementing an append");
-                        store.begin(T_ID_2);
-                        Integer result = store.read(KEY_1, T_ID_2);
+                        store.begin(REPLAYABLE_T_ID);
+                        Integer result = (Integer) store.read(KEY_1, REPLAYABLE_T_ID);
                         if (result == null)
                             result = 0; //if it does not exist, we're incrementing off of 0
                         int newValue = result + INCR_VALUE;
-                        store.write(KEY_1, newValue, T_ID_2);
-                        store.commit(T_ID_2);
+                        store.write(KEY_1, newValue, REPLAYABLE_T_ID);
+                        store.commit(REPLAYABLE_T_ID);
                     }
                 };
 
-        store.submitReplayableTransaction(APPEND_ACTION);
+        store.submitReplayableTransaction(INCREMENT_ACTION, null, store);
         try {
             store.commit(T_ID);
             Assert.fail("Expected the initial transaction to fail after the replayable action was called.");
         } catch (RetryLaterException rte) {
 
             //The previous attempt failed, so that will invalidate the transaction. It needs to be re-run
-            store.begin(T_ID_3);
-            currentValue = store.read(KEY_1, T_ID_3);
-            store.write(KEY_1, INCR_VALUE + currentValue, T_ID_3);
-            commitWithException(store, T_ID_3);
+            store.begin(T_ID_2);
+            currentValue = store.read(KEY_1, T_ID_2);
+            store.write(KEY_1, INCR_VALUE + currentValue, T_ID_2);
+            commitWithException(store, T_ID_2);
         }
         // Get a read on the value
-        store.begin(T_ID_4);
-        int RESULT_AFTER_ONE_INCREMENT = store.read(KEY_1, T_ID_4);
+        store.begin(T_ID_3);
+        int RESULT_AFTER_ONE_INCREMENT = store.read(KEY_1, T_ID_3);
         Assert.assertEquals("Increment on initial value did not take", INITIAL_VALUE + 2 * INCR_VALUE, RESULT_AFTER_ONE_INCREMENT);
-        commitWithException(store, T_ID_4);
+        commitWithException(store, T_ID_3);
     }
 
     //TODO: Write tests to handle edge cases of two threads trying to initialize a value simultaneously
@@ -381,7 +424,7 @@ public class TestTransactionalStore {
         final String KEY_1 = "key1";
         final int INITIAL_VALUE = 5;
 
-        // Start one transaction on the value for increment
+        // Start one transaction on the value for client_side_increment
         store.begin(INITIAL_READ_TRANSACTION);
         store.read(KEY_1, INITIAL_READ_TRANSACTION);
         commitWithException(store, INITIAL_READ_TRANSACTION);
@@ -467,8 +510,6 @@ public class TestTransactionalStore {
 
         final TransactionalKVStore<String, Integer> store = new TransactionalKVStore<String, Integer>();
 
-        final String KEY_1 = "key1";
-        final Integer INITIAL_VALUE = 55;
 
         final Integer T_ID_1 = 1;
         final Integer T_ID_2 = 2;
@@ -490,7 +531,7 @@ public class TestTransactionalStore {
 
         // A write occurred on this. Should this be committed, it invalidates any reads on this
         // key performed before the commit was made.
-        store.write(KEY_1, INITIAL_VALUE, T_ID_1);
+        store.write(KEY_1, VALUE_1, T_ID_1);
 
         store.read(KEY_1, T_ID_3);
 
@@ -509,7 +550,54 @@ public class TestTransactionalStore {
 
         // Now verify that the read transaction would need to be rolled back
         Assert.assertTrue("The read transaction, " + T_ID_3 + " needed to have been rolled back but was not", (store.needToRollBack(T_ID_3)));
+    }
 
+    /**
+     * Given:  A transaction that only has a begin and a commit
+     * Assert: The server treats this as an invalid transaction
+     */
+    @Test
+    public void testBeginAndCommitWithoutTransactions() throws InterruptedException {
 
+        final TransactionalKVStore<String, Integer> store = new TransactionalKVStore<String, Integer>();
+        final Integer T_ID_1 = 1;
+        store.begin(T_ID_1);
+        commitWithException(store, T_ID_1);
+    }
+
+    @Test
+    public void testBeginningSameTransactionTwice() throws InterruptedException {
+
+        final TransactionalKVStore<String, Integer> store = new TransactionalKVStore<String, Integer>();
+        final Integer T_ID_1 = 1;
+        store.begin(T_ID_1);
+        try {
+            store.begin(T_ID_1);
+            Assert.fail("Transaction was started more than once yet no exception was thrown");
+        } catch (RuntimeException rte) {
+
+            Assert.assertTrue(rte.getLocalizedMessage().contains("because it already exists"));
+        }
+    }
+
+    @Test
+    public void testCommittingSameTransactionTwice() throws InterruptedException {
+
+        final TransactionalKVStore<String, Integer> store = new TransactionalKVStore<String, Integer>();
+        final Integer T_ID_1 = 1;
+        store.begin(T_ID_1);
+        store.write(KEY_1, VALUE_1, T_ID_1);
+        commitWithException(store, T_ID_1);
+
+        try {
+
+            store.commit(T_ID_1);
+            Assert.fail("Should not have been able to commit twice on same transactionId, " +
+                    T_ID_1);
+        } catch (NoSuchTransactionException nst) {
+            Assert.assertTrue(nst.getLocalizedMessage().contains(String.valueOf(T_ID_1)));
+        } catch (RetryLaterException rte) {
+            Assert.fail("Incorrect exception type thrown");
+        }
     }
 }

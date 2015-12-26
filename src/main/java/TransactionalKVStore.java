@@ -28,7 +28,7 @@ import java.util.*;
  */
 public class TransactionalKVStore<K, V> {
 
-    final int DEFAULT_MAX_HANDLED_ATTEMPTS = 1;
+    final static int DEFAULT_MAX_HANDLED_ATTEMPTS = 100;
     private final int SLEEP_CONST_MS = 5;
     //The master copy of the data. Considered the source of truth. Only updated in the commit function.
     volatile HashMap<K, MetadataValue<V>> masterMap = new HashMap<K, MetadataValue<V>>();
@@ -70,7 +70,7 @@ public class TransactionalKVStore<K, V> {
     static boolean needToRollBack(final Transaction t, final List<StaticTransactionalKVStore.TransactionalUnit> transactionalUnits, final HashMap masterMap) {
 
         if (transactionalUnits.size() == 0) {
-            throw new RuntimeException("Transaction " + t.getId() + " had no associated transactionalUnits!!");
+            System.out.println("WARNING: transaction " + t.getId() + " had no associated transactionalUnits!!");
         }
 
         for (StaticTransactionalKVStore.TransactionalUnit unit : transactionalUnits) {
@@ -175,6 +175,13 @@ public class TransactionalKVStore<K, V> {
         transactionsAndState.get(transaction).put(key, new MetadataValue<V>(value));
     }
 
+    public void remove(K key) {
+
+        // Sort of like a write to make the value null.
+        // Do we clear metadata as a result?
+        throw new RuntimeException("Remove not yet implemented");
+    }
+
     /**
      * The logic here is that in this single-threaded server, if there were transactions that
      * dirtied values used, then a simple server-side replay should fix everything.
@@ -182,7 +189,8 @@ public class TransactionalKVStore<K, V> {
      * @param w
      * @throws InterruptedException
      */
-    public void submitReplayableTransaction(ReplayableTransactionWrapper w) throws InterruptedException {
+    public static void submitReplayableTransaction(ReplayableTransactionWrapper w, Object[]
+            arguments, TransactionalKVStore store) throws InterruptedException {
 
         int attempts = 0;
         while (true) {
@@ -190,7 +198,7 @@ public class TransactionalKVStore<K, V> {
             try {
 
                 //Expectation is that commit should occur here
-                w.runReplayableTransaction(null);
+                w.runReplayableTransaction(arguments, store, 100);
                 // if no exception thrown
                 break;
             } catch (RetryLaterException rte) {
@@ -209,11 +217,12 @@ public class TransactionalKVStore<K, V> {
 
         // Add some padding to make sure that events that are not supposed to occur in
         // the same milliseconds aren't treated as though they do
+
         Thread.sleep(SLEEP_CONST_MS);
         final Date COMMIT_START_TIME = new Date();
 
         System.out.println(COMMIT_START_TIME.getTime() + "--Will attempt to commit on transactionId " + transactionId);
-        Transaction transaction = transactionIdToObjectMapping.get(transactionId);
+        Transaction transaction = validateTransactionId(transactionId);
         if (transaction == null) {
             String message = "About to commit, but there" +
                     " is no transaction available with transaction id " + transactionId;
@@ -246,8 +255,6 @@ public class TransactionalKVStore<K, V> {
                     System.out.println("-----First write " + transactionId);
                     masterMap.put(KEY, vForInsert);
                 } else {
-
-                    System.out.println("xxTransaction " + transactionId + " upped value to " + transactionalUnit.getValue());
 
                     // Update
                     currentV.setValue((V) transactionalUnit.getValue());
@@ -287,18 +294,17 @@ public class TransactionalKVStore<K, V> {
 
     private Transaction validateTransactionId(int transactionId) {
         if (transactionId < 0) {
-            throw new RuntimeException("Transaction id " + transactionId + " cannot be found because it is not valid");
+            throw new NoSuchTransactionException(transactionId);
         }
 
         Transaction transaction = transactionIdToObjectMapping.get(transactionId);
         if (transaction == null) {
-            throw new RuntimeException("Transaction with transactionId " + transactionId + " not found.");
+            throw new NoSuchTransactionException(transactionId);
         }
 
         if (!transactionsInFlight.containsKey(transaction)) {
 
-            throw new RuntimeException("Transaction id " + transactionId + " cannot be found because it either is not running" +
-                    " or is invalid");
+            throw new NoSuchTransactionException(transactionId);
         }
 
         return transaction;
@@ -322,8 +328,11 @@ public class TransactionalKVStore<K, V> {
          * and manipulate them using the primitives available to produce a transaction.
          *
          * @param arguments
+         * @param maxAttempts
          * @throws RetryLaterException
          */
-        public abstract void runReplayableTransaction(Object[] arguments) throws RetryLaterException, InterruptedException;
+        public abstract void runReplayableTransaction(Object[] arguments, TransactionalKVStore
+                store, int maxAttempts) throws
+                RetryLaterException, InterruptedException;
     }
 }
