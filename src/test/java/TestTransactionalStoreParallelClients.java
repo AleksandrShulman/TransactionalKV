@@ -84,15 +84,15 @@ public class TestTransactionalStoreParallelClients {
         }
 
         // The index of the last item will be size -1
-        final Long finalValue = store.read(String.valueOf(size -1), FINAL_TRANSACTION_ID);
+        final Long finalValue = store.read(String.valueOf(size - 1), FINAL_TRANSACTION_ID);
         final Long previousValue = store.read(String.valueOf(size - 2), FINAL_TRANSACTION_ID);
         final Long prePreviousValue = store.read(String.valueOf(size - 3),
                 FINAL_TRANSACTION_ID);
 
         Assert.assertEquals("The final state did not have the values add up properly. Expected " +
-                prePreviousValue + " + " + previousValue + " = " + finalValue ,(Long)
+                prePreviousValue + " + " + previousValue + " = " + finalValue, (Long)
                 (previousValue +
-                prePreviousValue), finalValue);
+                        prePreviousValue), finalValue);
 
         final Long NUMBER_SUCCESSFUL_TRANSACTIONS = Long.valueOf
                 (FIBONACCI_TRANSACTIONS_PER_CLIENT) *
@@ -100,10 +100,9 @@ public class TestTransactionalStoreParallelClients {
         final Long EXPECTED_SIZE = 1 + NUMBER_SUCCESSFUL_TRANSACTIONS;
 
 
-
         System.out.println("The final state is " +
                 prePreviousValue + " + " + previousValue + " = " + finalValue + " with " + size +
-       " items present." );
+                " items present.");
 
         Assert.assertEquals("The final size. " +
                         "Check that Fibonacci transactions are not overwriting one another",

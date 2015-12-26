@@ -9,10 +9,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class TestTransactionalStore {
 
-    public static AtomicInteger sharedTransactionCounter = new AtomicInteger(0);
-    final int DEFAULT_MAX_FAILED_COMMIT_ATTEMPTS = 5;
     final static String KEY_1 = "key1";
-    final Integer VALUE_1 = 42;
+    public static AtomicInteger sharedTransactionCounter = new AtomicInteger(0);
     public static TransactionalKVStore.ReplayableTransactionWrapper CONTEXT_FREE_INCREMENT_ACTION;
     public static TransactionalKVStore.ReplayableTransactionWrapper FIBONACCI_ACTION;
 
@@ -40,8 +38,8 @@ public class TestTransactionalStore {
                         if (currentSize == null) {
 
                             //initialize the array
-                            store.write("0",0L, REPLAYABLE_T_ID );
-                            store.write("1",1L, REPLAYABLE_T_ID );
+                            store.write("0", 0L, REPLAYABLE_T_ID);
+                            store.write("1", 1L, REPLAYABLE_T_ID);
                             store.write(SIZE_KEY, 2L, REPLAYABLE_T_ID);
                             store.commit(REPLAYABLE_T_ID);
 
@@ -51,26 +49,26 @@ public class TestTransactionalStore {
                             // Then we want to increment size
 
 
-                            Long previousValue = (Long) store.read(String.valueOf((Long)currentSize
+                            Long previousValue = (Long) store.read(String.valueOf((Long) currentSize
                                             - 2),
                                     REPLAYABLE_T_ID);
-                            Long currentValue = (Long) store.read(String.valueOf((Long)currentSize
-                                            -1L),
-                                    REPLAYABLE_T_ID );
+                            Long currentValue = (Long) store.read(String.valueOf((Long) currentSize
+                                            - 1L),
+                                    REPLAYABLE_T_ID);
 
                             if (currentValue == null) {
                                 throw new IllegalStateException("A value was null for key " +
-                                        ((Long)currentSize - 1L) );
+                                        ((Long) currentSize - 1L));
                             }
 
                             if (previousValue == null) {
                                 throw new IllegalStateException("A value was null for key " +
-                                        ((Long)currentSize - 2L) );
+                                        ((Long) currentSize - 2L));
                             }
 
                             Long newValue = previousValue + currentValue;
                             store.write(String.valueOf(currentSize), newValue, REPLAYABLE_T_ID);
-                            store.write(SIZE_KEY, (Long)currentSize + 1, REPLAYABLE_T_ID);
+                            store.write(SIZE_KEY, (Long) currentSize + 1, REPLAYABLE_T_ID);
                             store.commit(REPLAYABLE_T_ID);
                         }
                     }
@@ -102,6 +100,8 @@ public class TestTransactionalStore {
                 };
     }
 
+    final int DEFAULT_MAX_FAILED_COMMIT_ATTEMPTS = 5;
+    final Integer VALUE_1 = 42;
 
     /**
      * Because sometimes we're not able to succeed right away, a user will need to have retry logic. In this case,
