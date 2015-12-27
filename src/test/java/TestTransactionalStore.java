@@ -11,8 +11,8 @@ public class TestTransactionalStore {
 
     final static String KEY_1 = "key1";
     public static AtomicInteger sharedTransactionCounter = new AtomicInteger(0);
-    public static TransactionalKVStore.ReplayableTransactionWrapper CONTEXT_FREE_INCREMENT_ACTION;
-    public static TransactionalKVStore.ReplayableTransactionWrapper FIBONACCI_ACTION;
+    public static TransactionalKVStore.ReplayableTransaction CONTEXT_FREE_INCREMENT_ACTION;
+    public static TransactionalKVStore.ReplayableTransaction FIBONACCI_ACTION;
 
     static {
 
@@ -22,10 +22,11 @@ public class TestTransactionalStore {
         The algorithm will use the value of size to set the value(size)'th key
          */
         FIBONACCI_ACTION =
-                new TransactionalKVStore.ReplayableTransactionWrapper() {
+                new TransactionalKVStore.ReplayableTransaction() {
+
                     @Override
-                    public void runReplayableTransaction(Object[] arguments, TransactionalKVStore
-                            store, int maxAttempts) throws RetryLaterException, InterruptedException {
+                    public void transaction(Object[] arguments, TransactionalKVStore
+                            store) throws RetryLaterException, InterruptedException {
 
                         // This is the number of elements in the Array
                         final String SIZE_KEY = "size";
@@ -53,12 +54,12 @@ public class TestTransactionalStore {
                                             - 2),
                                     REPLAYABLE_T_ID);
                             Long currentValue = (Long) store.read(String.valueOf((Long) currentSize
-                                            - 1L),
+                                            - 1),
                                     REPLAYABLE_T_ID);
 
                             if (currentValue == null) {
                                 throw new IllegalStateException("A value was null for key " +
-                                        ((Long) currentSize - 1L));
+                                        ((Long) currentSize - 1));
                             }
 
                             if (previousValue == null) {
@@ -75,10 +76,11 @@ public class TestTransactionalStore {
                 };
 
         CONTEXT_FREE_INCREMENT_ACTION =
-                new TransactionalKVStore.ReplayableTransactionWrapper() {
+                new TransactionalKVStore.ReplayableTransaction() {
+
                     @Override
-                    public void runReplayableTransaction(Object[] arguments, TransactionalKVStore
-                            store, int maxAttempts) throws RetryLaterException, InterruptedException {
+                    public void transaction(Object[] arguments, TransactionalKVStore
+                            store) throws RetryLaterException, InterruptedException {
 
                         // Very important that this all relies on the arguments being parsed
                         // correctly
@@ -153,11 +155,10 @@ public class TestTransactionalStore {
     public static void server_side_increment(TransactionalKVStore<String, Integer> store, final
     String KEY, final int AMOUNT, final int MAX_FAILED_ATTEMPTS) throws InterruptedException {
 
-        // Define the transaction
-
-        // Send it over
+        // Transaction is already defined. Just submit it for processing
         TransactionalKVStore.submitReplayableTransaction(
-                CONTEXT_FREE_INCREMENT_ACTION, new Object[]{KEY, AMOUNT, MAX_FAILED_ATTEMPTS}, store);
+                CONTEXT_FREE_INCREMENT_ACTION, new Object[]{KEY, AMOUNT, MAX_FAILED_ATTEMPTS},
+                store, MAX_FAILED_ATTEMPTS);
     }
 
     @Test
@@ -407,21 +408,18 @@ public class TestTransactionalStore {
         commitWithException(store, INITIAL_WRITE_TRANSACTION);
 
         final int T_ID = transactionId.incrementAndGet();
-        ;
         final int T_ID_2 = transactionId.incrementAndGet();
-        ;
         final int T_ID_3 = transactionId.incrementAndGet();
-        ;
 
         store.begin(T_ID);
         int currentValue = store.read(KEY_1, T_ID);
         store.write(KEY_1, currentValue + INCR_VALUE, T_ID);
 
-        final TransactionalKVStore.ReplayableTransactionWrapper INCREMENT_ACTION =
-                new TransactionalKVStore.ReplayableTransactionWrapper() {
+        final TransactionalKVStore.ReplayableTransaction INCREMENT_ACTION =
+                new TransactionalKVStore.ReplayableTransaction() {
                     @Override
-                    public void runReplayableTransaction(Object[] arguments, TransactionalKVStore
-                            store, int maxAttempts) throws
+                    public void transaction(Object[] arguments, TransactionalKVStore
+                            store) throws
                             RetryLaterException, InterruptedException {
 
                         final int REPLAYABLE_T_ID = transactionId.incrementAndGet();
@@ -436,7 +434,7 @@ public class TestTransactionalStore {
                     }
                 };
 
-        store.submitReplayableTransaction(INCREMENT_ACTION, null, store);
+        store.submitReplayableTransaction(INCREMENT_ACTION, null, store, TransactionalKVStore.DEFAULT_MAX_HANDLED_ATTEMPTS);
         try {
             store.commit(T_ID);
             Assert.fail("Expected the initial transaction to fail after the replayable action was called.");

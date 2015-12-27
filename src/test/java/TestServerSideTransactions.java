@@ -12,11 +12,12 @@ public class TestServerSideTransactions {
         final int INITIAL_T_ID = 0;
         final String KEY_1 = "key1";
         final Integer VALUE_1 = 55;
+        final int MAX_ATTEMPTS = 5;
 
         // Create a replayable transaction
-        TransactionalKVStore.ReplayableTransactionWrapper rtw = new TransactionalKVStore.ReplayableTransactionWrapper() {
+        TransactionalKVStore.ReplayableTransaction rtw = new TransactionalKVStore.ReplayableTransaction() {
             @Override
-            public void runReplayableTransaction(Object[] arguments, TransactionalKVStore store, int maxAttempts)
+            public void transaction(Object[] arguments, TransactionalKVStore store)
                     throws
                     RetryLaterException, InterruptedException {
 
@@ -28,6 +29,6 @@ public class TestServerSideTransactions {
             }
         };
 
-        store.submitReplayableTransaction(rtw, null, store);
+        store.submitReplayableTransaction(rtw, null, store, MAX_ATTEMPTS);
     }
 }

@@ -20,15 +20,13 @@ import java.util.*;
  * appends. The later transaction will need to be retried because the data
  * it used (initial amount) has become stale.
  * <p/>
- * 2. TODO: Define and add
- * <p/>
  * A secondary benefit to this KV store is the ability to re-run sets of
  * anonymous instructions, of arbitrarily complex logic. This way a user
  * will just need to send a request once and then poll (no need to resubmit).
  */
 public class TransactionalKVStore<K, V> {
 
-    final static int DEFAULT_MAX_HANDLED_ATTEMPTS = 100;
+    final public static int DEFAULT_MAX_HANDLED_ATTEMPTS = 100;
     private final int SLEEP_CONST_MS = 5;
     //The master copy of the data. Considered the source of truth. Only updated in the commit function.
     volatile HashMap<K, MetadataValue<V>> masterMap = new HashMap<K, MetadataValue<V>>();
@@ -59,8 +57,6 @@ public class TransactionalKVStore<K, V> {
      * <p/>
      * Info needed: 1. The commit timestamp of the write to that value.
      * 2. The transactions start time of the transaction you're trying to commit
-     * <p/>
-     * Rule 2: If you are about to commit a write,
      *
      * @param t
      * @param transactionalUnits
@@ -189,8 +185,13 @@ public class TransactionalKVStore<K, V> {
      * @param w
      * @throws InterruptedException
      */
-    public static void submitReplayableTransaction(ReplayableTransactionWrapper w, Object[]
-            arguments, TransactionalKVStore store) throws InterruptedException {
+    public static void submitReplayableTransaction(ReplayableTransaction w, Object[]
+            arguments, TransactionalKVStore store, Integer maxAttempts) throws
+            InterruptedException {
+
+        if (maxAttempts == null) {
+            maxAttempts = DEFAULT_MAX_HANDLED_ATTEMPTS;
+        }
 
         int attempts = 0;
         while (true) {
@@ -198,7 +199,7 @@ public class TransactionalKVStore<K, V> {
             try {
 
                 //Expectation is that commit should occur here
-                w.runReplayableTransaction(arguments, store, 100);
+                w.transaction(arguments, store);
                 // if no exception thrown
                 break;
             } catch (RetryLaterException rte) {
@@ -206,8 +207,9 @@ public class TransactionalKVStore<K, V> {
                 System.out.println(rte.getLocalizedMessage());
                 Thread.sleep(rte.getWaitTimeMs());
                 attempts++;
-                if (attempts > DEFAULT_MAX_HANDLED_ATTEMPTS) {
-                    throw new RuntimeException("Could not commit transaction, even after " + DEFAULT_MAX_HANDLED_ATTEMPTS + " attempts");
+                if (attempts > maxAttempts) {
+                    throw new RuntimeException("Could not commit transaction, even after " +
+                            attempts + " attempts");
                 }
             }
         }
@@ -269,7 +271,6 @@ public class TransactionalKVStore<K, V> {
                     // if there is no entry for this in the master map, but there was a read
                     // we need to inform the system that someone read null, which I guess is a read.
 
-                    // TODO: Update the last read time on this as we commit
                     Map<K, MetadataValue<V>> localTransactionState = transactionsAndState.get(transaction);
                     localTransactionState.get(KEY).setLastRead(COMMIT_START_TIME);
                     masterMap.put(KEY, localTransactionState.get(KEY));
@@ -321,18 +322,21 @@ public class TransactionalKVStore<K, V> {
         return needToRollBack(validateTransactionId(transactionId));
     }
 
-    public abstract static class ReplayableTransactionWrapper {
+    /**
+     * This class defined a transaction that is kicked off using a static method.
+     * The method will then attempt to replay it.
+     */
+    public abstract static class ReplayableTransaction {
 
         /**
          * This function is a general main method that will accept a list of arguments,
          * and manipulate them using the primitives available to produce a transaction.
          *
          * @param arguments
-         * @param maxAttempts
          * @throws RetryLaterException
          */
-        public abstract void runReplayableTransaction(Object[] arguments, TransactionalKVStore
-                store, int maxAttempts) throws
+        public abstract void transaction(Object[] arguments, TransactionalKVStore
+                store) throws
                 RetryLaterException, InterruptedException;
     }
 }
