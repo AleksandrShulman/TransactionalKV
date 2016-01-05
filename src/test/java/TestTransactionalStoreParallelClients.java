@@ -93,7 +93,7 @@ public class TestTransactionalStoreParallelClients {
 
         final Integer NUMBER_SUCCESSFUL_TRANSACTIONS =
                 (FIBONACCI_TRANSACTIONS_PER_CLIENT) *
-                CONCURRENT_CLIENTS;
+                        CONCURRENT_CLIENTS;
         final Integer EXPECTED_SIZE = 1 + NUMBER_SUCCESSFUL_TRANSACTIONS;
 
 
@@ -171,11 +171,11 @@ public class TestTransactionalStoreParallelClients {
     protected static class IncrementerClient implements Runnable {
 
         final int CLIENT_ID;
-        TransactionalKVStore<String, Integer> store;
         final int MAX_FAILED_ATTEMPTS;
         final int INCREMENTS_PER_CLIENT;
         final int INCREMENT_AMOUNT;
         final String KEY;
+        TransactionalKVStore<String, Integer> store;
         boolean serverSide;
 
         public IncrementerClient(TransactionalKVStore<String, Integer> store, boolean
@@ -229,9 +229,9 @@ public class TestTransactionalStoreParallelClients {
     protected static class FibonacciClient implements Runnable {
 
         final int CLIENT_ID;
-        TransactionalKVStore<String, Long> store;
         final int MAX_FAILED_ATTEMPTS;
         final int TRANSACTIONS_PER_CLIENT;
+        TransactionalKVStore<String, Long> store;
 
         public FibonacciClient(TransactionalKVStore<String, Long> store, final
         int clientId, final int TRANSACTIONS_PER_CLIENT,

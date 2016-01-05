@@ -20,32 +20,37 @@ import java.util.*;
  * appends. The later transaction will need to be retried because the data
  * it used (initial amount) has become stale.
  * <p/>
- * A secondary benefit to this KV store is the ability to re-run sets of
+ * A secondary feature of this KV store is the ability to re-run sets of
  * anonymous instructions, of arbitrarily complex logic. This way a user
  * will just need to send a request once and then poll (no need to resubmit).
  */
 public class TransactionalKVStore<K, V> {
 
     final public static int DEFAULT_MAX_HANDLED_ATTEMPTS = 100;
-    private final int SLEEP_CONST_MS = 5;
+    private final int SLEEP_CONST_MS = 1;
+
     //The master copy of the data. Considered the source of truth. Only updated in the commit function.
-    volatile HashMap<K, MetadataValue<V>> masterMap = new HashMap<K, MetadataValue<V>>();
+    HashMap<K, MetadataValue<V>> masterMap = new HashMap<K, MetadataValue<V>>();
+
     // Helper data structure for keeping track of transactions, based on their id.
     // Updated at the begin and the commit methods
-    volatile Map<Integer, Transaction> transactionIdToObjectMapping = new HashMap<Integer, Transaction>();
+
+    Map<Integer, Transaction> transactionIdToObjectMapping = new HashMap<Integer, Transaction>();
     // Data structure of the ongoing transactions and the units of work they are performing
     // Updated in the read/write section
-    volatile Map<Transaction, List<StaticTransactionalKVStore.TransactionalUnit>> transactionsInFlight =
+
+    Map<Transaction, List<StaticTransactionalKVStore.TransactionalUnit>>
+            transactionDeltas =
             new HashMap<Transaction, List<StaticTransactionalKVStore.TransactionalUnit>>();
 
-
-    /*
-     *  This data structure keeps a mapping of each transaction and its understanding of the world
-     *  It will contain a deep copy of all the values, so that if the master is changed, it will remain the same
-     *
-     *  Updated in the read/write section.
+    /**
+     * This data structure keeps a mapping of each transaction and its understanding of the world
+     * It will contain a deep copy of all the values, so that if the master is changed, it will remain the same
+     * <p/>
+     * Updated in the read/write section.
      */
-    volatile Map<Transaction, Map<K, MetadataValue<V>>> transactionsAndState = new HashMap<Transaction, Map<K, MetadataValue<V>>>();
+    Map<Transaction, Map<K, MetadataValue<V>>> transactionStates = new
+            HashMap<Transaction, Map<K, MetadataValue<V>>>();
 
     /**
      * This method will evaluate whether a transaction, t, in the given context of the transactionalUnits,
@@ -101,83 +106,6 @@ public class TransactionalKVStore<K, V> {
         return false;
     }
 
-    synchronized public void begin(final int transactionId) throws InterruptedException {
-
-        if (transactionId < 0) {
-            throw new RuntimeException("Transaction id " + transactionId + " cannot be started because it is invalid");
-        }
-
-        if (transactionIdToObjectMapping.containsKey(transactionId)) {
-            throw new RuntimeException("Transaction id " + transactionId + " cannot be started because it already exists");
-        }
-
-        Transaction newTransaction = new Transaction(transactionId);
-
-        //Make a deep copy of all objects inside this array
-        transactionIdToObjectMapping.put(transactionId, newTransaction);
-        transactionsAndState.put(newTransaction, (HashMap<K, MetadataValue<V>>) masterMap.clone());
-        transactionsInFlight.put(newTransaction, new ArrayList<StaticTransactionalKVStore.TransactionalUnit>());
-    }
-
-    /**
-     * Read the current value for a given key. If it is not present, return null
-     * <p/>
-     * Side effect is that it updates the timestamp for last read
-     *
-     * @param key
-     * @param transactionId
-     * @return
-     */
-    public V read(K key, int transactionId) throws InterruptedException {
-
-        Transaction transaction = validateTransactionId(transactionId);
-
-        final StaticTransactionalKVStore.IsolatedRead<K, V> read = new StaticTransactionalKVStore.IsolatedRead(key);
-
-        List<StaticTransactionalKVStore.TransactionalUnit> returnedTransactionList = transactionsInFlight.get(transaction);
-        if (returnedTransactionList == null) {
-            throw new IllegalStateException("Expected transaction with id " + transaction.getId() + " to not be null");
-        }
-
-        returnedTransactionList.add(read);
-        Map<K, MetadataValue<V>> localTransactionState = transactionsAndState.get(transaction);
-        if (localTransactionState == null) {
-            throw new IllegalStateException("Local transition state for transaction " + transaction.getId() + " cannot be null");
-        }
-
-        MetadataValue<V> metadataValue = localTransactionState.get(key);
-
-        if (metadataValue == null) {
-
-            //if there have been no requests on this key
-            MetadataValue<V> v = new MetadataValue<V>((V) null);
-            v.setLastWritten(null);
-            v.setLastRead(new Date());
-
-            // save the fact that someone attempted to read this value before it was written
-            localTransactionState.put(key, v);
-            return null;
-        }
-
-        return metadataValue.getValue();
-    }
-
-    public void write(K key, V value, int transactionId) throws InterruptedException {
-
-        Transaction transaction = validateTransactionId(transactionId);
-        final StaticTransactionalKVStore.ValueChange<K, V> write = new StaticTransactionalKVStore.ValueChange<K, V>(key, value);
-
-        transactionsInFlight.get(transaction).add(write);
-        transactionsAndState.get(transaction).put(key, new MetadataValue<V>(value));
-    }
-
-    public void remove(K key) {
-
-        // Sort of like a write to make the value null.
-        // Do we clear metadata as a result?
-        throw new RuntimeException("Remove not yet implemented");
-    }
-
     /**
      * The logic here is that in this single-threaded server, if there were transactions that
      * dirtied values used, then a simple server-side replay should fix everything.
@@ -215,6 +143,107 @@ public class TransactionalKVStore<K, V> {
         }
     }
 
+    synchronized public void begin(final int transactionId) throws InterruptedException {
+
+        if (transactionId < 0) {
+            throw new RuntimeException("Transaction id " + transactionId + " cannot be started because it is invalid");
+        }
+
+        if (transactionIdToObjectMapping.containsKey(transactionId)) {
+            throw new RuntimeException("Transaction id " + transactionId + " cannot be started because it already exists");
+        }
+
+        Transaction newTransaction = new Transaction(transactionId);
+
+        //Make a deep copy of all objects inside this array
+        transactionIdToObjectMapping.put(transactionId, newTransaction);
+        transactionStates.put(newTransaction, (HashMap<K, MetadataValue<V>>) masterMap.clone());
+        transactionDeltas.put(newTransaction, new ArrayList<StaticTransactionalKVStore.TransactionalUnit>());
+    }
+
+    /**
+     * Read the current value for a given key. If it is not present, return null
+     * <p/>
+     * Side effect is that it updates the timestamp for last read
+     *
+     * @param key
+     * @param transactionId
+     * @return
+     */
+    public V read(K key, final int transactionId) throws InterruptedException {
+
+        Transaction transaction = validateTransactionId(transactionId);
+
+        final StaticTransactionalKVStore.IsolatedRead<K, V> read = new StaticTransactionalKVStore.IsolatedRead(key);
+
+        List<StaticTransactionalKVStore.TransactionalUnit> returnedTransactionList = transactionDeltas.get(transaction);
+        if (returnedTransactionList == null) {
+            throw new IllegalStateException("Expected transaction with id " + transaction.getId() + " to not be null");
+        }
+
+        returnedTransactionList.add(read);
+        Map<K, MetadataValue<V>> localTransactionState = transactionStates.get(transaction);
+        if (localTransactionState == null) {
+            throw new IllegalStateException("Local transaction state for transaction " +
+                    transaction.getId() + " cannot be null");
+        }
+
+        MetadataValue<V> metadataValue = localTransactionState.get(key);
+
+        if (metadataValue == null) {
+
+            //if there have been no requests on this key
+            MetadataValue<V> v = new MetadataValue<V>((V) null);
+            v.setLastWritten(null);
+            v.setLastRead(new Date());
+
+            // save the fact that someone attempted to read this value before it was written
+            localTransactionState.put(key, v);
+            return null;
+        }
+
+        return metadataValue.getValue();
+    }
+
+    public void write(K key, V value, final int transactionId) throws InterruptedException {
+
+        Transaction transaction = validateTransactionId(transactionId);
+        final StaticTransactionalKVStore.ValueChange<K, V> write = new StaticTransactionalKVStore.ValueChange<K, V>(key, value);
+
+        transactionDeltas.get(transaction).add(write);
+        transactionStates.get(transaction).put(key, new MetadataValue<V>(value));
+    }
+
+    /**
+     * Logically removes a given KV pair from the store, but in practice, keeps the metadata around
+     * the transaction.
+     * <p/>
+     * TODO: Figure out the semantics of what happens if someone is trying to update this value?
+     * Do we have a distinction between create (new) vs. update. It's currently all muddled as
+     * an upsert.
+     * <p/>
+     * A remove should be a degenerate case of a ValueChange, where the new value is null.
+     *
+     * @param key
+     */
+    public void remove(K key, final int transactionId) {
+
+        Transaction transaction = validateTransactionId(transactionId);
+        final StaticTransactionalKVStore.ValueChange<K, V> remove = new StaticTransactionalKVStore
+                .Remove<K, V>(key);
+
+        transactionDeltas.get(transaction).add(remove);
+        MetadataValue valueToBeRemoved = transactionStates.get(transaction).get(key);
+        if (valueToBeRemoved == null) {
+            //it doesn't already exist. Is it worth adding a value saying that we tried to remove
+            // it?
+            transactionStates.get(transaction).put(key, new MetadataValue<V>(null));
+        } else {
+            transactionStates.get(transaction).put(key, valueToBeRemoved);
+        }
+
+    }
+
     synchronized public void commit(final int transactionId) throws RetryLaterException, InterruptedException {
 
         // Add some padding to make sure that events that are not supposed to occur in
@@ -233,15 +262,15 @@ public class TransactionalKVStore<K, V> {
         }
 
         if (needToRollBack(transaction)) {
-            transactionsAndState.remove(transaction);
-            transactionsInFlight.remove(transactionId);
+            transactionStates.remove(transaction);
+            transactionDeltas.remove(transactionId);
             String message = "need to roll back transaction " + transactionId;
             System.out.println(message);
             throw new RetryLaterException(message);
         }
 
         // Now that we know that nothing needs to be rolled back from this transaction
-        for (StaticTransactionalKVStore.TransactionalUnit transactionalUnit : transactionsInFlight.get(transaction)) {
+        for (StaticTransactionalKVStore.TransactionalUnit transactionalUnit : transactionDeltas.get(transaction)) {
 
             final K KEY = (K) transactionalUnit.getKey();
             MetadataValue<V> currentV = masterMap.get(KEY);
@@ -271,7 +300,7 @@ public class TransactionalKVStore<K, V> {
                     // if there is no entry for this in the master map, but there was a read
                     // we need to inform the system that someone read null, which I guess is a read.
 
-                    Map<K, MetadataValue<V>> localTransactionState = transactionsAndState.get(transaction);
+                    Map<K, MetadataValue<V>> localTransactionState = transactionStates.get(transaction);
                     localTransactionState.get(KEY).setLastRead(COMMIT_START_TIME);
                     masterMap.put(KEY, localTransactionState.get(KEY));
                 }
@@ -285,8 +314,8 @@ public class TransactionalKVStore<K, V> {
         // all LR/LR updated. Now it's time for housekeeping
 
         // Transaction is over. Release locks and remove all references to it.
-        transactionsInFlight.remove(transaction); // this transaction no longer running
-        transactionsAndState.remove(transaction); // if it's not running, we don't need its copy of the data
+        transactionDeltas.remove(transaction); // this transaction no longer running
+        transactionStates.remove(transaction); // if it's not running, we don't need its copy of the data
         transactionIdToObjectMapping.remove(transactionId); //we will no longer need to do lookups
 
         System.out.println(new Date().getTime() + "--Just finished commit on transactionId " + transactionId);
@@ -303,7 +332,7 @@ public class TransactionalKVStore<K, V> {
             throw new NoSuchTransactionException(transactionId);
         }
 
-        if (!transactionsInFlight.containsKey(transaction)) {
+        if (!transactionDeltas.containsKey(transaction)) {
 
             throw new NoSuchTransactionException(transactionId);
         }
@@ -315,7 +344,7 @@ public class TransactionalKVStore<K, V> {
      * master store
      */
     boolean needToRollBack(Transaction t) {
-        return TransactionalKVStore.needToRollBack(t, transactionsInFlight.get(t), masterMap);
+        return TransactionalKVStore.needToRollBack(t, transactionDeltas.get(t), masterMap);
     }
 
     boolean needToRollBack(final int transactionId) {

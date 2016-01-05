@@ -164,6 +164,18 @@ public class StaticTransactionalKVStore<K, V> {
         public V getValue() {
             return value;
         }
+    }
 
+    /**
+     * A remove is a ValueChange, except the value is set null.
+     *
+     * @param <K>
+     * @param <V>
+     */
+    public static class Remove<K, V> extends ValueChange<K, V> {
+
+        public Remove(K key) {
+            super(key, null);
+        }
     }
 }
